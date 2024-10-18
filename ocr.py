@@ -18,12 +18,16 @@ def opening(image):
 def canny(image):
     return cv2.Canny(image, 100, 200)
 
+def denoise(image):
+   return cv2.medianBlur(image, 5)  # Adjust kernel size as needed
+
 gray = get_grayscale(img_source)
+denoised = denoise(gray)
 thresh = thresholding(gray)
 opening = opening(gray)
 canny = canny(gray)
  
-for img in [img_source, gray, thresh, opening, canny]:
+for img in [img_source, denoised, thresh, opening, canny]:
     d = pytesseract.image_to_data(img, output_type=Output.DICT)
     n_boxes = len(d['text'])
  
