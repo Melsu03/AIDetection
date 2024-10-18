@@ -36,7 +36,7 @@ for img in [img_source, gray, thresh, opening, canny]:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
  
     for i in range(n_boxes):
-        if int(d['conf'][i]) > 40:
+        if int(d['conf'][i]) > 30:
             (text, x, y, w, h) = (d['text'][i], d['left'][i], d['top'][i], d['width'][i], d['height'][i])
             # don't show empty text
             if text and text.strip() != "":
