@@ -2,12 +2,13 @@ import cv2
 import pytesseract
 import numpy as np
 from pytesseract import Output
- 
-img_source = cv2.imread('sample/sample1.jpg')
+#from picamera2 import Picamera2, Preview
+
+img_source = cv2.imread('sample/sample7.jpeg')
 
 def get_grayscale(image):
     return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
- 
+
 def thresholding(image):
     return cv2.threshold(image, 0, 128, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
@@ -26,21 +27,21 @@ denoised = denoise(gray)
 thresh = thresholding(denoised)
 opening = opening(gray)
 canny = canny(gray)
- 
+
 for img in [img_source, gray, thresh, opening, canny]:
     d = pytesseract.image_to_data(img, output_type=Output.DICT)
     n_boxes = len(d['text'])
- 
+
     # back to RGB
     if len(img.shape) == 2:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
- 
+
     for i in range(n_boxes):
         if int(d['conf'][i]) > 30:
             (text, x, y, w, h) = (d['text'][i], d['left'][i], d['top'][i], d['width'][i], d['height'][i])
             # don't show empty text
             if text and text.strip() != "":
-                img = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                img = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 1)
                 img = cv2.putText(img, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 3)
  
     cv2.imshow('img', img)
