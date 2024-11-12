@@ -23,26 +23,25 @@ def denoise(image):
    return cv2.medianBlur(image, 5)  # Adjust kernel size as needed
 
 gray = get_grayscale(img_source)
-denoised = denoise(gray)
-thresh = thresholding(denoised)
-opening = opening(gray)
-canny = canny(gray)
 
-for img in [img_source, gray, thresh, opening, canny]:
-    d = pytesseract.image_to_data(img, output_type=Output.DICT)
-    n_boxes = len(d['text'])
+data = pytesseract.image_to_data(gray, output_type=Output.DICT)
+n_boxes = len(data['text'])
 
-    # back to RGB
-    if len(img.shape) == 2:
-        img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+paragraphs = {}
+for i in range(n_boxes):
+    block_num = data['block_num'][i]
+    par_num = data['par_num'][i]
+    text = data['text'][i]
+    if text.strip():
+        if block_num not in paragraphs:
+            paragraphs[block_num] = {}
+        if par_num not in paragraphs[block_num]:
+            paragraphs[block_num][par_num] = []
+        paragraphs[block_num][par_num].append(text)
 
-    for i in range(n_boxes):
-        if int(d['conf'][i]) > 30:
-            (text, x, y, w, h) = (d['text'][i], d['left'][i], d['top'][i], d['width'][i], d['height'][i])
-            # don't show empty text
-            if text and text.strip() != "":
-                img = cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 1)
-                img = cv2.putText(img, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 3)
- 
-    cv2.imshow('img', img)
-    cv2.waitKey(0)
+# Print the paragraphs as one whole blob with spaced paragraphs
+for block_num in paragraphs:
+    for par_num in paragraphs[block_num]:
+        paragraph_text = ' '.join(paragraphs[block_num][par_num])
+        print(paragraph_text)
+        print("\n")  # Add a newline to separate paragraphs
