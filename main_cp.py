@@ -5,9 +5,8 @@ import argparse
 from pytesseract import Output
 
 class ImageTextExtractor:
-    def __init__(self, filename):
-        self.filename = filename
-        self.img_source = cv2.imread(filename)
+    def __init__(self, image_array):
+        self.img_source = image_array
         if self.img_source is None:
             raise ValueError(f"Error: Unable to open image file {filename}")
 
@@ -32,19 +31,19 @@ class ImageTextExtractor:
         data = pytesseract.image_to_data(gray, output_type=Output.DICT)
         n_boxes = len(data['text'])
 
-        # Draw bounding boxes and text on the image
-        for i in range(n_boxes):
-            if int(data['conf'][i]) > 30:  # Filter out weak confidence text
-                (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
-                text = data['text'][i]
-                if text.strip():
-                    self.img_source = cv2.rectangle(self.img_source, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    self.img_source = cv2.putText(self.img_source, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        # # Draw bounding boxes and text on the image
+        # for i in range(n_boxes):
+        #     if int(data['conf'][i]) > 30:  # Filter out weak confidence text
+        #         (x, y, w, h) = (data['left'][i], data['top'][i], data['width'][i], data['height'][i])
+        #         text = data['text'][i]
+        #         if text.strip():
+        #             self.img_source = cv2.rectangle(self.img_source, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        #             self.img_source = cv2.putText(self.img_source, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        # Display the image with bounding boxes
-        cv2.imshow('Image with Bounding Boxes', self.img_source)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # # Display the image with bounding boxes
+        # cv2.imshow('Image with Bounding Boxes', self.img_source)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
         # Organize text into paragraphs
         paragraphs = {}
@@ -79,11 +78,10 @@ if __name__ == "__main__":
     
     
 ## Use
-from image_text_extractor import ImageTextExtractor
+from ocr import ImageTextExtractor
 
 def main():
-    filename = 'sample/sample7.jpeg'
-    extractor = ImageTextExtractor(filename)
+    extractor = ImageTextExtractor(img)
     extractor.extract_text()
 
 if __name__ == "__main__":
