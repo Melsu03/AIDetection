@@ -45,12 +45,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Start the camera preview
         self.picam2.start()
+        #self.picam2.set_controls({"AfMode": 1})
 
         # Connect capture button to the capture function
         self.ui.btnCapture.clicked.connect(self.capture_image)
-
-        # Connect checkbox state change to the auto-focus function
-        self.ui.checkBox.stateChanged.connect(self.onChkChange_AutoFocus)
 
     def capture_image(self):
         # Capture an image and save it
@@ -59,7 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # print(f"Capturing image to {image_path}")
 
         # Create and start the capture thread
-        self.capture_thread = CaptureThread(self.picam2, image_path)
+        self.capture_thread = CaptureThread(self.picam2)
         self.capture_thread.capture_done.connect(self.on_capture_done)
         self.capture_thread.start()
 
@@ -71,12 +69,6 @@ class MainWindow(QtWidgets.QMainWindow):
         extracted_text = extractor.extract_text()
         print("Extracted Text:")
         print(extracted_text)
-    
-    def onChkChange_AutoFocus(self):
-        if self.ui.checkBox.isChecked():
-            self.picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
-        else:
-            self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual})
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
