@@ -15,7 +15,7 @@ from threading import Thread
 app = Flask(__name__)
 
 # Shared variable to store the result
-shared_result = {"status": "", "result": "", "perplexity": ""}
+shared_result = {"status": "", "result": "", "intrp": "", "perplexity": "", "burstiness": ""}
 
 @app.route('/result', methods=['GET'])
 def get_result():
@@ -94,7 +94,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(result)
 
             # Update the shared result
-            shared_result = {"status": "success", "result": result[0], "perplexity": result[1]}
+            shared_result = {"status": "success", "result": result[0], "intrp": result[1], "perplexity": result[2], "burstiness": result[3]}
         except Exception as e:
             print(f"Error loading file: {e}")
             shared_result = {"status": "error", "result": str(e)}
@@ -119,7 +119,7 @@ class MainWindow(QtWidgets.QMainWindow):
         print(result)
 
         # Update the shared result
-        shared_result = {"status": "success", "result": result[0], "perplexity": result[1]}
+        shared_result = {"status": "success", "result": result[0], "intrp": result[1], "perplexity": result[2], "burstiness": result[3]}
 
 def run_flask():
     # Start Flask app on a separate thread
