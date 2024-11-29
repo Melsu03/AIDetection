@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from ui_main_window import QtMainWindow
 from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
-from infer_model import AIPlagiarismDetector  # Import the AITextDetector class
+from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
 from flask import Flask, jsonify
 from threading import Thread
 
