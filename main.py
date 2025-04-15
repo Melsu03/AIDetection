@@ -5,7 +5,7 @@ from picamera2 import Picamera2, controls
 from picamera2.previews.qt import QGlPicamera2
 import cv2
 import numpy as np
-from ui_main_window import QtMainWindow
+from ui_main_window2 import QtMainWindow
 from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
 from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
 from flask import Flask, jsonify
@@ -45,7 +45,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.picam2 = Picamera2()
 
         # Set up camera preview configuration
-        preview_width = 1080
+        preview_width = 400
         preview_height = int(self.picam2.sensor_resolution[1] * preview_width / self.picam2.sensor_resolution[0])
         preview_config = self.picam2.create_preview_configuration(main={"size": (preview_width, preview_height)})
         self.picam2.configure(preview_config)
