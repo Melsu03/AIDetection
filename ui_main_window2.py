@@ -23,7 +23,7 @@ class QtMainWindow(object):
         self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
-        self.wgtCamera = QtWidgets.QOpenGLWidget(self.verticalLayoutWidget)
+        self.wgtCamera = QtWidgets.QWidget(self.verticalLayoutWidget)
         self.wgtCamera.setObjectName("wgtCamera")
         self.verticalLayout.addWidget(self.wgtCamera)
         self.btnCapture = QtWidgets.QPushButton(self.centralwidget)
