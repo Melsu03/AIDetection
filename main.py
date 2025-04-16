@@ -45,7 +45,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.picam2 = Picamera2()
 
         # Set up camera preview configuration
-        preview_width = 400
+        preview_width = 1080 
         preview_height = int(self.picam2.sensor_resolution[1] * preview_width / self.picam2.sensor_resolution[0])
         preview_config = self.picam2.create_preview_configuration(main={"size": (preview_width, preview_height)})
         self.picam2.configure(preview_config)
