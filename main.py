@@ -64,7 +64,7 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.picam2.set_controls({"AfMode": 1})
 
         # Connect capture button to the capture function
-        self.ui.btnCapture.clicked.connect(self.capture_image)
+        self.ui.btnSingleCap.clicked.connect(self.capture_image)
         
         # Connect btnFromFile to the load_file method
         self.ui.btnFromFile.clicked.connect(self.load_file)
