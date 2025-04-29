@@ -30,15 +30,29 @@ class AIPlagiarismDetector:
         
     def calculate_perplexity(self, text):
         print("Calculating perplexity...")
-        encodings = self.gpt_tokenizer.encode(
-            text, return_tensors="pt", truncation=True, max_length=2048
-        ).to(self.device)
-        with torch.no_grad():
-            outputs = self.gpt_model(encodings, labels=encodings)
-            loss = outputs.loss
-            perplexity = torch.exp(loss)
-        print(f"Perplexity: {perplexity.item()}")
-        return perplexity.item()
+        # Handle empty or very short text
+        if not text or len(text.strip()) < 5:
+            print("Text too short for perplexity calculation")
+            return 100.0  # Return a default high perplexity value
+        
+        try:
+            encodings = self.gpt_tokenizer.encode(
+                text, return_tensors="pt", truncation=True, max_length=2048
+            ).to(self.device)
+            
+            # Ensure encodings are of the correct type
+            if encodings.dtype != torch.long:
+                encodings = encodings.long()
+            
+            with torch.no_grad():
+                outputs = self.gpt_model(encodings, labels=encodings)
+                loss = outputs.loss
+                perplexity = torch.exp(loss)
+            print(f"Perplexity: {perplexity.item()}")
+            return perplexity.item()
+        except Exception as e:
+            print(f"Error calculating perplexity: {e}")
+            return 100.0  # Return a default high perplexity value
 
     def calculate_burstiness(self, text):
         print("Calculating burstiness...")
@@ -62,18 +76,39 @@ class AIPlagiarismDetector:
         return sentence_embedding
     
     def extract_features_for_prediction(self, text):
-        perplexity = self.calculate_perplexity(text)
-        burstiness = self.calculate_burstiness(text)
-        bert_embedding = self.calculate_bert_embedding(text)
+        try:
+            # Handle empty text
+            if not text or len(text.strip()) < 5:
+                print("Text too short for feature extraction")
+                # Return default values
+                return 100.0, 0.0, np.zeros(771)
+            
+            perplexity = self.calculate_perplexity(text)
+            burstiness = self.calculate_burstiness(text)
+            bert_embedding = self.calculate_bert_embedding(text)
 
-        # Placeholder feature
-        placeholder_feature = 0  # Adjust if additional features are needed
+            # Placeholder feature
+            placeholder_feature = 0  # Adjust if additional features are needed
 
-        # Combine features
-        combined_features = np.hstack(
-            [[perplexity, burstiness, placeholder_feature], bert_embedding]
-        )
-        return perplexity, burstiness, combined_features
+            # Combine features
+            combined_features = np.hstack(
+                [[perplexity, burstiness, placeholder_feature], bert_embedding]
+            )
+            
+            # Ensure the feature vector has the expected length
+            if combined_features.shape[0] != 771:
+                print(f"Warning: Feature count mismatch. Expected 771, got {combined_features.shape[0]}.")
+                # Pad or truncate to match expected size
+                if combined_features.shape[0] < 771:
+                    combined_features = np.pad(combined_features, (0, 771 - combined_features.shape[0]))
+                else:
+                    combined_features = combined_features[:771]
+            
+            return perplexity, burstiness, combined_features
+        except Exception as e:
+            print(f"Error in feature extraction: {e}")
+            # Return default values
+            return 100.0, 0.0, np.zeros(771)
 
     def detect_ai_text(self, text):
         print("Starting detection process...")

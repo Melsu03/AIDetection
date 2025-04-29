@@ -12,6 +12,7 @@ from flask import Flask, jsonify
 from threading import Thread
 from queue import Queue
 from threading import Lock
+from PyQt5.QtWidgets import QMessageBox
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -88,6 +89,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize the AITextDetector
         self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
 
+    def show_error_dialog(self, title, message):
+        """Display an error dialog with the given title and message"""
+        error_dialog = QMessageBox(self)
+        error_dialog.setIcon(QMessageBox.Critical)
+        error_dialog.setWindowTitle(title)
+        error_dialog.setText(message)
+        error_dialog.setStandardButtons(QMessageBox.Ok)
+        error_dialog.exec_()
+
     def toggle_batch_mode(self):
         """Toggle between single capture and batch capture modes"""
         self.batch_mode = True
@@ -119,28 +129,57 @@ class MainWindow(QtWidgets.QMainWindow):
                     "status": "error", 
                     "message": "No images in batch to process"
                 }
+                self.show_error_dialog("Batch Processing Error", "No images in batch to process")
                 return
             
             print(f"Processing {queue_size} images in batch")
             batch_results = []
+            error_occurred = False
+            error_message = ""
             
             while not self.image_queue.empty():
-                image_array = self.image_queue.get()
-                
-                # Process the image
-                extractor = ImageTextExtractor(image_array)
-                extracted_text = extractor.extract_text()
-                result = self.detector.detect_ai_text(extracted_text)
-                
-                batch_results.append({
-                    "text": extracted_text,
-                    "result": result[0],
-                    "perplexity": result[1],
-                    "burstiness": result[2],
-                    "interpretation": result[3]
-                })
+                try:
+                    image_array = self.image_queue.get()
+                    
+                    # Process the image
+                    extractor = ImageTextExtractor(image_array)
+                    extracted_text = extractor.extract_text()
+                    
+                    # Skip processing if no text was extracted
+                    if not extracted_text or len(extracted_text.strip()) < 5:
+                        print("No meaningful text extracted from image, skipping")
+                        continue
+                        
+                    result = self.detector.detect_ai_text(extracted_text)
+                    
+                    batch_results.append({
+                        "text": extracted_text,
+                        "result": result[0],
+                        "perplexity": result[1],
+                        "burstiness": result[2],
+                        "interpretation": result[3] if len(result) > 3 else "No interpretation available"
+                    })
+                except Exception as e:
+                    error_message = str(e)
+                    print(f"Error processing image: {e}")
+                    error_occurred = True
+                    continue
         
         # Calculate summary statistics
+        if not batch_results:
+            error_msg = "No valid results from batch processing"
+            if error_occurred:
+                error_msg += f"\nError: {error_message}"
+            
+            shared_result = {
+                "status": "error",
+                "message": error_msg
+            }
+            print("Batch processing complete but no valid results were obtained")
+            self.show_error_dialog("Batch Processing Failed", error_msg)
+            self.stop_batch_mode()
+            return
+        
         ai_count = sum(1 for r in batch_results if "AI-generated" in r["result"])
         human_count = len(batch_results) - ai_count
         
@@ -154,6 +193,13 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         
         print(f"Batch processing complete. AI detected in {ai_count}/{len(batch_results)} images")
+        
+        # Show warning if some images failed
+        if error_occurred:
+            self.show_error_dialog("Partial Batch Processing", 
+                                  f"Processed {len(batch_results)} out of {queue_size} images.\n"
+                                  f"Some images could not be processed due to errors.\n"
+                                  f"Last error: {error_message}")
         
         # Return to normal mode after processing
         self.stop_batch_mode()
