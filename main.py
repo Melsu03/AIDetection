@@ -10,6 +10,8 @@ from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
 from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
 from flask import Flask, jsonify
 from threading import Thread
+from queue import Queue
+from threading import Lock
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -66,9 +68,43 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Connect btnFromFile to the load_file method
         self.ui.btnFromFile.clicked.connect(self.load_file)
+
+        # Add batch processing components
+        self.image_queue = Queue()
+        self.queue_lock = Lock()
+        self.batch_mode = False
+        
+        # Connect batch processing buttons that are already in the UI
+        self.ui.btnBatchCap.clicked.connect(self.toggle_batch_mode)
+        self.ui.btnBatchTake.clicked.connect(self.capture_image)
+        self.ui.btnBatchNext.clicked.connect(self.process_batch)
+        self.ui.btnBatchStop.clicked.connect(self.stop_batch_mode)
+
+        # Initially hide batch operation buttons
+        self.ui.btnBatchTake.hide()
+        self.ui.btnBatchNext.hide()
+        self.ui.btnBatchStop.hide()
         
         # Initialize the AITextDetector
         self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
+
+    def toggle_batch_mode(self):
+        """Toggle between single capture and batch capture modes"""
+        self.batch_mode = True
+        
+        # Show batch operation buttons, hide single capture button
+        self.ui.btnSingleCap.hide()
+        self.ui.btnBatchCap.hide()
+        self.ui.btnBatchTake.show()
+        self.ui.btnBatchNext.show()
+        self.ui.btnBatchStop.show()
+        
+        # Clear any existing queue
+        with self.queue_lock:
+            while not self.image_queue.empty():
+                self.image_queue.get()
+        
+        print("Batch mode activated. Capture images and then process them.")
 
     def load_file(self):
         global shared_result
