@@ -105,6 +105,71 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.image_queue.get()
         
         print("Batch mode activated. Capture images and then process them.")
+    
+    def process_batch(self):
+        """Process all images in the queue"""
+        global shared_result
+        
+        with self.queue_lock:
+            queue_size = self.image_queue.qsize()
+            
+            if queue_size == 0:
+                print("No images in batch to process")
+                shared_result = {
+                    "status": "error", 
+                    "message": "No images in batch to process"
+                }
+                return
+            
+            print(f"Processing {queue_size} images in batch")
+            batch_results = []
+            
+            while not self.image_queue.empty():
+                image_array = self.image_queue.get()
+                
+                # Process the image
+                extractor = ImageTextExtractor(image_array)
+                extracted_text = extractor.extract_text()
+                result = self.detector.detect_ai_text(extracted_text)
+                
+                batch_results.append({
+                    "text": extracted_text,
+                    "result": result[0],
+                    "perplexity": result[1],
+                    "burstiness": result[2],
+                    "interpretation": result[3]
+                })
+        
+        # Calculate summary statistics
+        ai_count = sum(1 for r in batch_results if "AI-generated" in r["result"])
+        human_count = len(batch_results) - ai_count
+        
+        # Update shared result with batch summary
+        shared_result = {
+            "status": "batch_complete",
+            "total_images": len(batch_results),
+            "ai_detected": ai_count,
+            "human_detected": human_count,
+            "details": batch_results
+        }
+        
+        print(f"Batch processing complete. AI detected in {ai_count}/{len(batch_results)} images")
+        
+        # Return to normal mode after processing
+        self.stop_batch_mode()
+    
+    def stop_batch_mode(self):
+        """Exit batch mode and return to normal operation"""
+        self.batch_mode = False
+        
+        # Show normal buttons, hide batch operation buttons
+        self.ui.btnCapture.show()
+        self.ui.btnBatchCap.show()
+        self.ui.btnBatchTake.hide()
+        self.ui.btnBatchNext.hide()
+        self.ui.btnBatchStop.hide()
+        
+        print("Batch mode deactivated.")
 
     def load_file(self):
         global shared_result
@@ -141,21 +206,56 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture_thread.capture_done.connect(self.on_capture_done)
         self.capture_thread.start()
 
-    def on_capture_done(self, image_array):
-        global shared_result
+    # def on_capture_done(self, image_array):
+    #     global shared_result
 
-        # Use ImageTextExtractor to extract text from the image array
-        extractor = ImageTextExtractor(image_array)
-        extracted_text = extractor.extract_text()
-        print("Extracted Text:")
-        print(extracted_text)
+    #     # Use ImageTextExtractor to extract text from the image array
+    #     extractor = ImageTextExtractor(image_array)
+    #     extracted_text = extractor.extract_text()
+    #     print("Extracted Text:")
+    #     print(extracted_text)
         
-        # Use AITextDetector to check if the extracted text is AI-generated
-        result = self.detector.detect_ai_text(extracted_text)
-        print(result)
+    #     # Use AITextDetector to check if the extracted text is AI-generated
+    #     result = self.detector.detect_ai_text(extracted_text)
+    #     print(result)
 
-        # Update the shared result
-        shared_result = {"status": "success", "result": result[0], "perplexity": result[1], "burstiness": result[2], "intrp": result[3]}
+    #     # Update the shared result
+    #     shared_result = {"status": "success", "result": result[0], "perplexity": result[1], "burstiness": result[2], "intrp": result[3]}
+    
+    def on_capture_done(self, image_array):
+        """Handle captured image based on current mode"""
+        global shared_result
+        
+        if self.batch_mode:
+            # In batch mode, add to queue instead of processing immediately
+            with self.queue_lock:
+                self.image_queue.put(image_array)
+                queue_size = self.image_queue.qsize()
+                
+            print(f"Added image to batch. Queue size: {queue_size}")
+            shared_result = {
+                "status": "batch_update", 
+                "message": f"Image added to batch. Total: {queue_size}"
+            }
+        else:
+            # In single capture mode, process immediately as before
+            extractor = ImageTextExtractor(image_array)
+            extracted_text = extractor.extract_text()
+            print("Extracted Text:")
+            print(extracted_text)
+            
+            # Use AITextDetector to check if the extracted text is AI-generated
+            result = self.detector.detect_ai_text(extracted_text)
+            print(result)
+
+            # Update the shared result
+            shared_result = {
+                "status": "success", 
+                "result": result[0], 
+                "perplexity": result[1], 
+                "burstiness": result[2], 
+                "intrp": result[3]
+            }
 
 def run_flask():
     # Start Flask app on a separate thread
