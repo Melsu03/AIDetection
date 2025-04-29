@@ -209,7 +209,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.batch_mode = False
         
         # Show normal buttons, hide batch operation buttons
-        self.ui.btnCapture.show()
+        self.ui.btnSingleCap.show()
         self.ui.btnBatchCap.show()
         self.ui.btnBatchTake.hide()
         self.ui.btnBatchNext.hide()
