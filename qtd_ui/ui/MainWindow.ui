@@ -37,13 +37,13 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>70</y>
+      <y>130</y>
       <width>341</width>
-      <height>71</height>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
-     <string>Single Capture</string>
+     <string>Single Camera Capture</string>
     </property>
     <property name="default">
      <bool>false</bool>
@@ -56,7 +56,7 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>10</y>
+      <y>360</y>
       <width>341</width>
       <height>21</height>
      </rect>
@@ -65,14 +65,14 @@
    <widget class="QPushButton" name="btnFromFile">
     <property name="geometry">
      <rect>
-      <x>740</x>
-      <y>40</y>
-      <width>51</width>
-      <height>21</height>
+      <x>450</x>
+      <y>10</y>
+      <width>341</width>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
-     <string>File</string>
+     <string>Single File Capture</string>
     </property>
     <property name="default">
      <bool>false</bool>
@@ -85,13 +85,13 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>150</y>
+      <y>190</y>
       <width>341</width>
-      <height>71</height>
+      <height>51</height>
      </rect>
     </property>
     <property name="text">
-     <string>Batch Capture</string>
+     <string>Batch Camera Capture</string>
     </property>
     <property name="default">
      <bool>false</bool>
@@ -104,7 +104,7 @@
     <property name="geometry">
      <rect>
       <x>570</x>
-      <y>230</y>
+      <y>250</y>
       <width>101</width>
       <height>71</height>
      </rect>
@@ -123,7 +123,7 @@
     <property name="geometry">
      <rect>
       <x>690</x>
-      <y>230</y>
+      <y>250</y>
       <width>101</width>
       <height>71</height>
      </rect>
@@ -142,7 +142,7 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>230</y>
+      <y>250</y>
       <width>101</width>
       <height>71</height>
      </rect>
@@ -161,7 +161,7 @@
     <property name="geometry">
      <rect>
       <x>460</x>
-      <y>310</y>
+      <y>330</y>
       <width>81</width>
       <height>16</height>
      </rect>
@@ -174,13 +174,32 @@
     <property name="geometry">
      <rect>
       <x>560</x>
-      <y>310</y>
+      <y>330</y>
       <width>21</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
      <string>0</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btnFromFileBatch">
+    <property name="geometry">
+     <rect>
+      <x>450</x>
+      <y>70</y>
+      <width>341</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Batch File Capture</string>
+    </property>
+    <property name="default">
+     <bool>false</bool>
+    </property>
+    <property name="flat">
+     <bool>false</bool>
     </property>
    </widget>
   </widget>
