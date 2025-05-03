@@ -104,10 +104,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_dialog.setText(message)
         self.progress_dialog.setStandardButtons(QMessageBox.NoButton)
         
+        # Make dialog closable by clicking the X button
+        self.progress_dialog.setWindowFlags(
+            self.progress_dialog.windowFlags() | 
+            QtCore.Qt.WindowCloseButtonHint
+        )
+        
+        # Connect close event to our close_progress_dialog method
+        self.progress_dialog.closeEvent = lambda event: self.close_progress_dialog()
+        
         # Show the dialog without blocking
         self.progress_dialog.show()
         
-        # Process events to ensure the dialog is displayed
+        # Process events to ensure the dialog is displayed immediately
         QtWidgets.QApplication.processEvents()
     
     def close_progress_dialog(self):
@@ -259,12 +268,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # Get the file path from the lineEdit widget
         file_path = self.ui.lineEdit.text()
 
+        # Show progress dialog immediately
+        self.show_progress_dialog("Processing File", 
+                                 "Loading file...\nPlease wait.")
+        QtWidgets.QApplication.processEvents()
+
         try:
-            # Show progress dialog
-            self.show_progress_dialog("Processing File", 
-                                     "Loading and analyzing file...\n"
-                                     "AI plagiarism detection in progress. Please wait.")
-            
             # Load the image using OpenCV
             image_array = cv2.imread(file_path)
 
@@ -272,11 +281,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close_progress_dialog()
                 raise FileNotFoundError("Could not load the image from the provided path.")
 
+            # Update progress dialog
+            if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                self.progress_dialog.setText("Extracting text from file...\nPlease wait.")
+                QtWidgets.QApplication.processEvents()
+
             # Process the loaded image
             extractor = ImageTextExtractor(image_array)
             extracted_text = extractor.extract_text()
             print("Extracted Text from File:")
             print(extracted_text)
+            
+            # Update progress dialog
+            if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                QtWidgets.QApplication.processEvents()
             
             # Detect AI-generated text
             result = self.detector.detect_ai_text(extracted_text)
@@ -301,6 +320,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error_dialog("File Loading Error", error_msg)
 
     def capture_image(self):
+        # If not in batch mode, show progress dialog immediately
+        if not self.batch_mode:
+            self.show_progress_dialog("Processing", "Capturing image...\nPlease wait.")
+        
         # Create and start the capture thread
         self.capture_thread = CaptureThread(self.picam2)
         self.capture_thread.capture_done.connect(self.on_capture_done)
@@ -324,8 +347,13 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             # In single capture mode, process immediately as before
             try:
-                # Show progress dialog
-                self.show_progress_dialog("Processing", "AI plagiarism detection in progress...\nPlease wait.")
+                # Update progress dialog message
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText("Extracting text from image...\nPlease wait.")
+                    QtWidgets.QApplication.processEvents()
+                else:
+                    # If dialog was closed, create a new one
+                    self.show_progress_dialog("Processing", "Extracting text from image...\nPlease wait.")
                 
                 extractor = ImageTextExtractor(image_array)
                 extracted_text = extractor.extract_text()
@@ -336,6 +364,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     print(error_msg)
                     self.show_error_dialog("Text Extraction Error", error_msg)
                     return
+                
+                # Update progress dialog for AI detection step
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                    QtWidgets.QApplication.processEvents()
                     
                 print("Extracted Text:")
                 print(extracted_text)
