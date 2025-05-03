@@ -75,10 +75,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchNext.clicked.connect(self.process_batch)
         self.ui.btnBatchStop.clicked.connect(self.stop_batch_mode)
 
-        # Initially hide batch operation buttons
+        # Initially hide batch operation buttons and batch size labels
         self.ui.btnBatchTake.hide()
         self.ui.btnBatchNext.hide()
         self.ui.btnBatchStop.hide()
+        self.ui.lblBatchSize.hide()
+        self.ui.lblBatchSizeVal.hide()
         
         # Initialize the AITextDetector
         self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
@@ -142,6 +144,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchTake.show()
         self.ui.btnBatchNext.show()
         self.ui.btnBatchStop.show()
+        
+        # Show batch size labels
+        self.ui.lblBatchSize.show()
+        self.ui.lblBatchSizeVal.show()
+        self.ui.lblBatchSizeVal.setText("0")  # Reset batch size counter
         
         # Clear any existing queue
         with self.queue_lock:
@@ -277,6 +284,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchNext.hide()
         self.ui.btnBatchStop.hide()
         
+        # Hide batch size labels
+        self.ui.lblBatchSize.hide()
+        self.ui.lblBatchSizeVal.hide()
+        
         print("Batch mode deactivated.")
 
     def load_file(self):
@@ -353,6 +364,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.image_queue.put(image_array)
                 queue_size = self.image_queue.qsize()
             
+            # Update batch size label
+            self.ui.lblBatchSizeVal.setText(str(queue_size))
+        
             print(f"Added image to batch. Queue size: {queue_size}")
             self.show_message_dialog(
                 "Batch Processing", 

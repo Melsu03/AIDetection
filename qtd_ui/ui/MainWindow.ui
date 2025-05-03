@@ -110,7 +110,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Detect</string>
+     <string>Capture</string>
     </property>
     <property name="default">
      <bool>false</bool>
@@ -129,7 +129,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>Next</string>
+     <string>Process</string>
     </property>
     <property name="default">
      <bool>false</bool>
@@ -155,6 +155,32 @@
     </property>
     <property name="flat">
      <bool>false</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lblBatchSize">
+    <property name="geometry">
+     <rect>
+      <x>460</x>
+      <y>310</y>
+      <width>51</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Batch size:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lblBatchSizeVal">
+    <property name="geometry">
+     <rect>
+      <x>520</x>
+      <y>310</y>
+      <width>47</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0</string>
     </property>
    </widget>
   </widget>
