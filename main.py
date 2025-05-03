@@ -155,7 +155,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "Batch Mode", 
             "Batch mode activated.\n\n"
             "1. Click 'Capture' to add images to the batch.\n"
-            "2. When all pages are captured, click 'Next' to analyze the entire document.\n"
+            "2. When all pages are captured, click 'Process' to analyze the entire document.\n"
             "3. Click 'Stop' to exit batch mode without processing."
         )
     
@@ -357,7 +357,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_message_dialog(
                 "Batch Processing", 
                 f"Added image {queue_size} to batch.\n\n"
-                f"Capture more images to add to the document, then click 'Next' to process the entire document."
+                f"Capture more images to add to the document, then click 'Process' to analyze the entire document."
             )
         else:
             # In single capture mode, process immediately as before
