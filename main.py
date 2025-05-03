@@ -158,7 +158,7 @@ class MainWindow(QtWidgets.QMainWindow):
         msg_box.exec_()
 
     def convert_highlighted_text_to_html(self, highlighted_text):
-        """Convert the highlighted text with [AI: xx%] markers to HTML with red color for AI text only"""
+        """Convert the highlighted text with [AI: xx%] markers to HTML with red color for AI text only, removing tags"""
         import re
         
         # Find all markers and their positions
@@ -182,13 +182,13 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 text = highlighted_text[pos:]
             
-            # Format based on marker type
+            # Format based on marker type, but remove the marker itself
             if marker.startswith('[AI:'):
-                # AI text in red
-                result.append(f'<span style="color:red; font-weight:bold;">{marker}</span> <span style="color:red;">{text[len(marker):]}</span>')
+                # AI text in red, without the marker
+                result.append(f'<span style="color:red;">{text[len(marker):]}</span>')
             else:
-                # Human text in default color
-                result.append(f'<span style="font-weight:bold;">{marker}</span>{text[len(marker):]}')
+                # Human text in default color, without the marker
+                result.append(f'{text[len(marker):]}')
         
         # Add any text before the first marker
         if all_markers[0][0] > 0:
