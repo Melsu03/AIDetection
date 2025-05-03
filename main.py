@@ -299,7 +299,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "Batch mode activated.\n\n"
             "1. Click 'Capture' to add images to the batch.\n"
             "2. When all pages are captured, click 'Process' to analyze the entire document.\n"
-            "3. Click 'Stop' to exit batch mode without processing."
+            "3. Click 'Cancel' to exit batch mode without processing."
         )
 
     def toggle_batch_file_mode(self):
