@@ -11,7 +11,7 @@ from infer_model import AIPlagiarismDetector  # Import the AITextDetector class
 # Remove Flask imports
 from queue import Queue
 from threading import Lock
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QFileDialog
 
 try:
     from infer_model import AIPlagiarismDetector as AdvancedAIPlagiarismDetector
@@ -65,7 +65,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnSingleCap.clicked.connect(self.capture_image)
         
         # Connect btnFromFile to the load_file method
+        self.ui.btnFromFile.setText("Browse...")  # Change button text to be more intuitive
         self.ui.btnFromFile.clicked.connect(self.load_file)
+        self.ui.lineEdit.setPlaceholderText("Selected image file path will appear here")
+        self.ui.lineEdit.setReadOnly(True)  # Make it read-only since we're using file dialog
 
         # Add batch processing components
         self.image_queue = Queue()
@@ -313,9 +316,21 @@ class MainWindow(QtWidgets.QMainWindow):
         print("Batch mode deactivated.")
 
     def load_file(self):
-        # Get the file path from the lineEdit widget
-        file_path = self.ui.lineEdit.text()
-
+        # Open file dialog to select an image file
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            "",  # Start in the current directory
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
+        )
+        
+        # If user cancels the dialog, file_path will be empty
+        if not file_path:
+            return
+        
+        # Update the lineEdit with the selected file path
+        self.ui.lineEdit.setText(file_path)
+        
         # Show progress dialog immediately
         self.show_progress_dialog("Processing File", 
                                  "Loading file...\nPlease wait.")
@@ -357,7 +372,7 @@ class MainWindow(QtWidgets.QMainWindow):
             result_text += f"Result: {result[0]}\n"
             result_text += f"Perplexity: {result[1]:.2f}\n"
             result_text += f"Burstiness: {result[2]:.2f}\n\n"
-            result_text += f"Interpretation: {result[3]}"
+            result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
             
             self.show_message_dialog("File Analysis Results", result_text)
             
