@@ -7,12 +7,13 @@ import cv2
 import numpy as np
 from ui_main_window import QtMainWindow
 from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
-from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
+from infer_model import AIPlagiarismDetector  # Import the AITextDetector class
 # Remove Flask imports
 from queue import Queue
 from threading import Lock
 from PyQt5.QtWidgets import QMessageBox
 
+# Remove Flask imports
 # Remove Flask app initialization
 # Remove shared_result global variable
 
@@ -82,8 +83,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.lblBatchSize.hide()
         self.ui.lblBatchSizeVal.hide()
         
-        # Initialize the AITextDetector
-        self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
+        # Initialize the advanced AI detector
+        try:
+            self.detector = AIPlagiarismDetector(
+                'model/trained_model3.pkl',
+                'model/trained_model3_xgb.pkl'  # Second model is optional
+            )
+        except Exception as e:
+            print(f"Error initializing advanced detector: {e}")
+            print("Falling back to basic detector...")
+            # Fallback to the simpler detector if the advanced one fails
+            from infer_model2 import AIPlagiarismDetector
+            self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
 
     def show_message_dialog(self, title, message, icon=QMessageBox.Information):
         """Display a message dialog with the given title and message"""
@@ -406,7 +417,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close_progress_dialog()
 
                 # Display results in a message box (without text preview)
-                result_text = f"Result: {result[0]}\n\n"
+                result_text = f"Result: {result[0]}\n"
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
