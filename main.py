@@ -13,11 +13,13 @@ from queue import Queue
 from threading import Lock
 from PyQt5.QtWidgets import QMessageBox
 
-# Remove Flask imports
-# Remove Flask app initialization
-# Remove shared_result global variable
-
-# Remove Flask route
+try:
+    from infer_model import AdvancedAIPlagiarismDetector
+    from infer_model2 import AIPlagiarismDetector as BasicAIPlagiarismDetector
+except ImportError as e:
+    print(f"Import error: {e}")
+    # Ensure at least the basic detector is available
+    from infer_model2 import AIPlagiarismDetector as BasicAIPlagiarismDetector
 
 class CaptureThread(QThread):
     capture_done = pyqtSignal(np.ndarray)
@@ -85,16 +87,25 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Initialize the advanced AI detector
         try:
-            self.detector = AIPlagiarismDetector(
+            print("Attempting to initialize advanced detector...")
+            self.detector = AdvancedAIPlagiarismDetector(
                 'model/trained_model3.pkl',
                 'model/trained_model3_xgb.pkl'  # Second model is optional
             )
+            print("Advanced detector initialized successfully")
         except Exception as e:
             print(f"Error initializing advanced detector: {e}")
             print("Falling back to basic detector...")
             # Fallback to the simpler detector if the advanced one fails
-            from infer_model2 import AIPlagiarismDetector
-            self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
+            try:
+                self.detector = BasicAIPlagiarismDetector('model/trained_model2.pkl')
+                print("Basic detector initialized successfully")
+            except Exception as e2:
+                print(f"Error initializing basic detector: {e2}")
+                # Last resort fallback
+                from infer_model import AIPlagiarismDetector
+                self.detector = AIPlagiarismDetector('model/trained_model1.pkl')
+                print("Fallback detector initialized")
 
     def show_message_dialog(self, title, message, icon=QMessageBox.Information):
         """Display a message dialog with the given title and message"""
