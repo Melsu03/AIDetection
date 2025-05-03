@@ -169,5 +169,78 @@ class AIPlagiarismDetector:
         print(f"{interpretation}")
         print(f"Overall Perplexity: {overall_perplexity:.2f} | Overall Burstiness: {overall_burstiness:.2f}\n")
 
+        # Step 2: Highlight parts that look AI-generated sentence-by-sentence
+        sentences = self.split_into_sentences(text)
+        highlighted_text = ""
+        ai_sentences = []
+        human_sentences = []
+
+        print("Analyzing individual sentences...")
+        for i, sentence in enumerate(sentences):
+            try:
+                if len(sentence.split()) < 5:  # Skip short sentences
+                    highlighted_text += sentence + " "
+                    continue
+
+                perplexity, burstiness, features = self.extract_features_for_prediction(sentence)
+                if features.shape[0] != 771:
+                    print(f"Skipping sentence (feature mismatch).")
+                    highlighted_text += sentence + " "
+                    continue
+
+                ai_prob_s, human_prob_s = self.get_combined_probabilities(features)
+
+                # Store sentence classification for detailed report
+                if ai_prob_s > 65:  # Threshold for AI classification at sentence level
+                    ai_sentences.append((sentence, ai_prob_s))
+                    highlighted_text += f"[AI: {ai_prob_s:.1f}%] {sentence} "
+                else:
+                    human_sentences.append((sentence, human_prob_s))
+                    highlighted_text += f"[Human: {human_prob_s:.1f}%] {sentence} "
+
+                # Print progress for every 5th sentence
+                if i % 5 == 0:
+                    print(f"Processed {i}/{len(sentences)} sentences...")
+
+            except Exception as e:
+                print(f"Error analyzing sentence: {e}")
+                highlighted_text += sentence + " "
+                continue
+
+        # Create a detailed analysis report
+        detailed_analysis = self._create_detailed_analysis(ai_sentences, human_sentences, ai_prob, human_prob)
+        
         # Return the results in a format compatible with the existing system
-        return [result_message, overall_perplexity, overall_burstiness, interpretation]
+        return [result_message, overall_perplexity, overall_burstiness, interpretation, highlighted_text, detailed_analysis]
+
+    def _create_detailed_analysis(self, ai_sentences, human_sentences, overall_ai_prob, overall_human_prob):
+        """Create a detailed analysis report based on sentence-level classification"""
+        
+        # Calculate statistics
+        total_sentences = len(ai_sentences) + len(human_sentences)
+        ai_percentage = len(ai_sentences) / total_sentences * 100 if total_sentences > 0 else 0
+        
+        # Create the report
+        report = f"Detailed Analysis:\n"
+        report += f"Overall: {overall_ai_prob:.1f}% AI, {overall_human_prob:.1f}% Human\n"
+        report += f"Sentences: {total_sentences} total, {len(ai_sentences)} AI ({ai_percentage:.1f}%), {len(human_sentences)} Human ({100-ai_percentage:.1f}%)\n\n"
+        
+        # Add examples of highest confidence AI sentences
+        if ai_sentences:
+            report += "Top AI-detected sentences:\n"
+            for sentence, prob in sorted(ai_sentences, key=lambda x: x[1], reverse=True)[:3]:
+                # Truncate long sentences
+                if len(sentence) > 100:
+                    sentence = sentence[:97] + "..."
+                report += f"- {sentence} ({prob:.1f}%)\n"
+        
+        # Add examples of highest confidence Human sentences
+        if human_sentences:
+            report += "\nTop Human-detected sentences:\n"
+            for sentence, prob in sorted(human_sentences, key=lambda x: x[1], reverse=True)[:3]:
+                # Truncate long sentences
+                if len(sentence) > 100:
+                    sentence = sentence[:97] + "..."
+                report += f"- {sentence} ({prob:.1f}%)\n"
+        
+        return report

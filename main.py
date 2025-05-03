@@ -110,14 +110,48 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.detector = AIPlagiarismDetector('model/trained_model1.pkl')
                 print("Fallback detector initialized")
 
-    def show_message_dialog(self, title, message, icon=QMessageBox.Information):
-        """Display a message dialog with the given title and message"""
-        msg_dialog = QMessageBox(self)
-        msg_dialog.setIcon(icon)
-        msg_dialog.setWindowTitle(title)
-        msg_dialog.setText(message)
-        msg_dialog.setStandardButtons(QMessageBox.Ok)
-        msg_dialog.exec_()
+    def show_message_dialog(self, title, message, detailed_text=None, highlighted_text=None):
+        """Show a message dialog with optional detailed text and highlighted text"""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        
+        # If we have detailed text, add it as detailed text
+        if detailed_text:
+            msg_box.setDetailedText(detailed_text)
+        
+        # If we have highlighted text, create a custom widget to display it
+        if highlighted_text:
+            # Create a text edit widget to show the highlighted text
+            from PyQt5.QtWidgets import QTextEdit, QVBoxLayout, QWidget, QPushButton, QDialog
+            from PyQt5.QtCore import Qt
+            
+            # Create a custom dialog for the highlighted text
+            highlight_dialog = QDialog(self)
+            highlight_dialog.setWindowTitle("Sentence-by-Sentence Analysis")
+            highlight_dialog.setMinimumSize(800, 600)
+            
+            layout = QVBoxLayout()
+            
+            # Create a text edit widget for the highlighted text
+            text_edit = QTextEdit()
+            text_edit.setReadOnly(True)
+            text_edit.setPlainText(highlighted_text)
+            layout.addWidget(text_edit)
+            
+            # Add a close button
+            close_button = QPushButton("Close")
+            close_button.clicked.connect(highlight_dialog.close)
+            layout.addWidget(close_button, alignment=Qt.AlignRight)
+            
+            highlight_dialog.setLayout(layout)
+            
+            # Add a button to the message box to show the highlighted text
+            highlight_button = msg_box.addButton("Show Sentence Analysis", QMessageBox.ActionRole)
+            highlight_button.clicked.connect(highlight_dialog.exec_)
+        
+        # Show the message box
+        msg_box.exec_()
 
     def show_progress_dialog(self, title, message):
         """Display a non-blocking progress message"""
@@ -285,8 +319,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
-                
-                self.show_message_dialog("Batch Analysis Results", result_text)
+
+                # Check if we have highlighted text and detailed analysis
+                highlighted_text = result[4] if len(result) > 4 else None
+                detailed_analysis = result[5] if len(result) > 5 else None
+
+                self.show_message_dialog("Batch Analysis Results", result_text, detailed_analysis, highlighted_text)
                 print(f"Batch processing complete. Result: {result[0]}")
                 
             except Exception as e:
@@ -373,8 +411,12 @@ class MainWindow(QtWidgets.QMainWindow):
             result_text += f"Perplexity: {result[1]:.2f}\n"
             result_text += f"Burstiness: {result[2]:.2f}\n\n"
             result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
-            
-            self.show_message_dialog("File Analysis Results", result_text)
+
+            # Check if we have highlighted text and detailed analysis
+            highlighted_text = result[4] if len(result) > 4 else None
+            detailed_analysis = result[5] if len(result) > 5 else None
+
+            self.show_message_dialog("File Analysis Results", result_text, detailed_analysis, highlighted_text)
             
         except Exception as e:
             self.close_progress_dialog()
@@ -447,8 +489,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
-                
-                self.show_message_dialog("Analysis Results", result_text)
+
+                # Check if we have highlighted text and detailed analysis
+                highlighted_text = result[4] if len(result) > 4 else None
+                detailed_analysis = result[5] if len(result) > 5 else None
+
+                self.show_message_dialog("Analysis Results", result_text, detailed_analysis, highlighted_text)
                 
             except Exception as e:
                 # Ensure dialog is closed even on exception
