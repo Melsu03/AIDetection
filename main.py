@@ -263,13 +263,20 @@ class MainWindow(QtWidgets.QMainWindow):
     def toggle_batch_mode(self):
         """Toggle between single capture and batch capture modes"""
         self.batch_mode = True
+        self.batch_file_mode = False  # Explicitly set to false for camera batch mode
         
-        # Show batch operation buttons, hide single capture button
+        # Show batch operation buttons, hide single capture and file buttons
         self.ui.btnSingleCap.hide()
         self.ui.btnBatchCap.hide()
+        self.ui.btnFromFile.hide()  # Hide single file button
+        self.ui.btnFromFileBatch.hide()  # Hide batch file button
+        
         self.ui.btnBatchTake.show()
         self.ui.btnBatchNext.show()
         self.ui.btnBatchStop.show()
+        
+        # Ensure the button text is "Capture" for camera batch mode
+        self.ui.btnBatchTake.setText("Capture")
         
         # Hide the lineEdit as it's not needed in camera batch mode
         self.ui.lineEdit.hide()
