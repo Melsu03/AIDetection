@@ -36,27 +36,71 @@ class AIPlagiarismDetector:
             return 100.0  # Return a default high perplexity value
         
         try:
-            encodings = self.gpt_tokenizer.encode(
-                text, return_tensors="pt", truncation=True, max_length=2048
-            ).to(self.device)
-            
-            # Ensure encodings are of the correct type
-            if encodings.dtype != torch.long:
-                encodings = encodings.long()
-            
-            with torch.no_grad():
-                outputs = self.gpt_model(encodings, labels=encodings)
-                loss = outputs.loss
-                perplexity = torch.exp(loss)
-            print(f"Perplexity: {perplexity.item()}")
-            return perplexity.item()
+            # For very long texts (like concatenated pages), we'll process in chunks
+            # to avoid memory issues and get a more representative perplexity
+            if len(text) > 4000:
+                print("Long text detected, processing in chunks...")
+                chunks = [text[i:i+2000] for i in range(0, len(text), 2000)]
+                perplexities = []
+                
+                for i, chunk in enumerate(chunks[:5]):  # Process up to 5 chunks (10K chars)
+                    print(f"Processing chunk {i+1}/{min(len(chunks), 5)}...")
+                    encodings = self.gpt_tokenizer.encode(
+                        chunk, return_tensors="pt", truncation=True, max_length=1024
+                    ).to(self.device)
+                    
+                    # Ensure encodings are of the correct type
+                    if encodings.dtype != torch.long:
+                        encodings = encodings.long()
+                    
+                    with torch.no_grad():
+                        outputs = self.gpt_model(encodings, labels=encodings)
+                        loss = outputs.loss
+                        chunk_perplexity = torch.exp(loss).item()
+                        perplexities.append(chunk_perplexity)
+                
+                # Use the average perplexity of all chunks
+                perplexity = sum(perplexities) / len(perplexities)
+                print(f"Average perplexity across chunks: {perplexity}")
+                return perplexity
+            else:
+                # For shorter texts, process as before
+                encodings = self.gpt_tokenizer.encode(
+                    text, return_tensors="pt", truncation=True, max_length=2048
+                ).to(self.device)
+                
+                # Ensure encodings are of the correct type
+                if encodings.dtype != torch.long:
+                    encodings = encodings.long()
+                
+                with torch.no_grad():
+                    outputs = self.gpt_model(encodings, labels=encodings)
+                    loss = outputs.loss
+                    perplexity = torch.exp(loss)
+                print(f"Perplexity: {perplexity.item()}")
+                return perplexity.item()
         except Exception as e:
             print(f"Error calculating perplexity: {e}")
             return 100.0  # Return a default high perplexity value
 
     def calculate_burstiness(self, text):
         print("Calculating burstiness...")
-        words = text.split()
+        # For multi-page documents, we want to analyze the text as a whole
+        # but ignore page markers
+        
+        # Remove page markers if present (e.g., "--- Page 1 ---")
+        cleaned_text = text
+        if "--- Page" in text:
+            import re
+            cleaned_text = re.sub(r'--- Page \d+ ---', '', text)
+        
+        words = cleaned_text.split()
+        
+        # Skip calculation for very short texts
+        if len(words) < 10:
+            print("Text too short for meaningful burstiness calculation")
+            return 0.0
+        
         word_counts = Counter(words)
         mean_frequency = np.mean(list(word_counts.values()))
         variance = np.var(list(word_counts.values()))
@@ -66,12 +110,36 @@ class AIPlagiarismDetector:
     
     def calculate_bert_embedding(self, text):
         print("Calculating BERT embedding...")
-        inputs = self.bert_tokenizer(
-            text, return_tensors="pt", padding=True, truncation=True, max_length=512
-        ).to(self.device)
-        with torch.no_grad():
-            outputs = self.bert_model(**inputs)
-        sentence_embedding = outputs.last_hidden_state.mean(dim=1).cpu().numpy().squeeze()
+        
+        # For very long texts (like concatenated pages), we'll process in chunks
+        # and average the embeddings
+        if len(text) > 1000:
+            print("Long text detected, processing in chunks for BERT embedding...")
+            # Split into chunks of approximately 500 characters
+            chunks = [text[i:i+500] for i in range(0, min(len(text), 5000), 500)]
+            all_embeddings = []
+            
+            for i, chunk in enumerate(chunks):
+                print(f"Processing BERT chunk {i+1}/{len(chunks)}...")
+                inputs = self.bert_tokenizer(
+                    chunk, return_tensors="pt", padding=True, truncation=True, max_length=512
+                ).to(self.device)
+                with torch.no_grad():
+                    outputs = self.bert_model(**inputs)
+                chunk_embedding = outputs.last_hidden_state.mean(dim=1).cpu().numpy().squeeze()
+                all_embeddings.append(chunk_embedding)
+            
+            # Average all chunk embeddings
+            sentence_embedding = np.mean(all_embeddings, axis=0)
+        else:
+            # For shorter texts, process as before
+            inputs = self.bert_tokenizer(
+                text, return_tensors="pt", padding=True, truncation=True, max_length=512
+            ).to(self.device)
+            with torch.no_grad():
+                outputs = self.bert_model(**inputs)
+            sentence_embedding = outputs.last_hidden_state.mean(dim=1).cpu().numpy().squeeze()
+        
         print("BERT embedding calculated.")
         return sentence_embedding
     
@@ -112,6 +180,15 @@ class AIPlagiarismDetector:
 
     def detect_ai_text(self, text):
         print("Starting detection process...")
+        
+        # For multi-page documents, add some preprocessing
+        if "--- Page" in text:
+            print("Multi-page document detected")
+            # Count pages
+            import re
+            page_count = len(re.findall(r'--- Page \d+ ---', text))
+            print(f"Document contains approximately {page_count} pages")
+        
         perplexity, burstiness, features = self.extract_features_for_prediction(text)
 
         # Check if features match classifier's expectation
@@ -130,15 +207,31 @@ class AIPlagiarismDetector:
         else:
             result = "The text is likely human-written."
 
+        # Provide more detailed interpretation for multi-page documents
         interpretation = None
-        if perplexity < 30 and burstiness > 1.5:
-            interpretation = (
-                "Low Perplexity and High Burstiness suggest the text is AI-generated."
-            )
-        elif perplexity > 30 and burstiness < 1.5:
-            interpretation = (
-                "High Perplexity and Low Burstiness suggest the text is human-written."
-            )
+        if "--- Page" in text:
+            if perplexity < 30 and burstiness > 1.5:
+                interpretation = (
+                    "Low Perplexity and High Burstiness across multiple pages suggest the document is AI-generated."
+                )
+            elif perplexity > 30 and burstiness < 1.5:
+                interpretation = (
+                    "High Perplexity and Low Burstiness across multiple pages suggest the document is human-written."
+                )
+            else:
+                interpretation = (
+                    f"Document analysis: Perplexity={perplexity:.2f}, Burstiness={burstiness:.2f}. "
+                    f"The document shows mixed characteristics."
+                )
+        else:
+            if perplexity < 30 and burstiness > 1.5:
+                interpretation = (
+                    "Low Perplexity and High Burstiness suggest the text is AI-generated."
+                )
+            elif perplexity > 30 and burstiness < 1.5:
+                interpretation = (
+                    "High Perplexity and Low Burstiness suggest the text is human-written."
+                )
 
         print(f"Result: {result}")
         print(f"Perplexity: {perplexity}")

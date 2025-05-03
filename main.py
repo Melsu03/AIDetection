@@ -8,21 +8,15 @@ import numpy as np
 from ui_main_window import QtMainWindow
 from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
 from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
-from flask import Flask, jsonify
-from threading import Thread
+# Remove Flask imports
 from queue import Queue
 from threading import Lock
 from PyQt5.QtWidgets import QMessageBox
 
-# Initialize Flask app
-app = Flask(__name__)
+# Remove Flask app initialization
+# Remove shared_result global variable
 
-# Shared variable to store the result
-shared_result = { "status": "", "result": "", "perplexity": "", "burstiness": "", "intrp": "" }
-
-@app.route('/result', methods=['GET'])
-def get_result():
-    return jsonify(shared_result)
+# Remove Flask route
 
 class CaptureThread(QThread):
     capture_done = pyqtSignal(np.ndarray)
@@ -89,14 +83,32 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize the AITextDetector
         self.detector = AIPlagiarismDetector('model/trained_model2.pkl')
 
-    def show_error_dialog(self, title, message):
-        """Display an error dialog with the given title and message"""
-        error_dialog = QMessageBox(self)
-        error_dialog.setIcon(QMessageBox.Critical)
-        error_dialog.setWindowTitle(title)
-        error_dialog.setText(message)
-        error_dialog.setStandardButtons(QMessageBox.Ok)
-        error_dialog.exec_()
+    def show_message_dialog(self, title, message, icon=QMessageBox.Information):
+        """Display a message dialog with the given title and message"""
+        msg_dialog = QMessageBox(self)
+        msg_dialog.setIcon(icon)
+        msg_dialog.setWindowTitle(title)
+        msg_dialog.setText(message)
+        msg_dialog.setStandardButtons(QMessageBox.Ok)
+        msg_dialog.exec_()
+
+    def show_progress_dialog(self, title, message):
+        """Display a non-blocking progress message"""
+        self.progress_dialog = QMessageBox(self)
+        self.progress_dialog.setIcon(QMessageBox.Information)
+        self.progress_dialog.setWindowTitle(title)
+        self.progress_dialog.setText(message)
+        self.progress_dialog.setStandardButtons(QMessageBox.NoButton)
+        # Show the dialog without blocking
+        self.progress_dialog.show()
+        # Process events to ensure the dialog is displayed
+        QtWidgets.QApplication.processEvents()
+    
+    def close_progress_dialog(self):
+        """Close the progress dialog if it exists"""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+            self.progress_dialog.close()
+            self.progress_dialog = None
 
     def toggle_batch_mode(self):
         """Toggle between single capture and batch capture modes"""
@@ -115,91 +127,109 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.image_queue.get()
         
         print("Batch mode activated. Capture images and then process them.")
+        
+        # Show a message dialog instead of using resultTextEdit
+        self.show_message_dialog(
+            "Batch Mode", 
+            "Batch mode activated.\n\n"
+            "1. Click 'Capture' to add images to the batch.\n"
+            "2. When all pages are captured, click 'Next' to analyze the entire document.\n"
+            "3. Click 'Stop' to exit batch mode without processing."
+        )
     
     def process_batch(self):
-        """Process all images in the queue"""
-        global shared_result
+        """Process all images in the queue as a single document"""
         
         with self.queue_lock:
             queue_size = self.image_queue.qsize()
             
             if queue_size == 0:
                 print("No images in batch to process")
-                shared_result = {
-                    "status": "error", 
-                    "message": "No images in batch to process"
-                }
                 self.show_error_dialog("Batch Processing Error", "No images in batch to process")
                 return
             
-            print(f"Processing {queue_size} images in batch")
-            batch_results = []
+            # Show progress dialog
+            self.show_progress_dialog("Processing Batch", 
+                                     f"Processing {queue_size} images as a single document...\n"
+                                     f"AI plagiarism detection in progress. Please wait.")
+            
+            print(f"Processing {queue_size} images as a single document")
+            
+            # Extract text from all images and concatenate
+            all_extracted_text = ""
+            image_count = 0
             error_occurred = False
             error_message = ""
+            
+            # First pass: extract text from all images
+            temp_queue = Queue()
             
             while not self.image_queue.empty():
                 try:
                     image_array = self.image_queue.get()
+                    temp_queue.put(image_array)  # Save image for potential debugging
                     
-                    # Process the image
+                    # Extract text from the image
                     extractor = ImageTextExtractor(image_array)
                     extracted_text = extractor.extract_text()
                     
-                    # Skip processing if no text was extracted
+                    # Skip if no text was extracted
                     if not extracted_text or len(extracted_text.strip()) < 5:
-                        print("No meaningful text extracted from image, skipping")
+                        print(f"No meaningful text extracted from image {image_count+1}, skipping")
                         continue
-                        
-                    result = self.detector.detect_ai_text(extracted_text)
                     
-                    batch_results.append({
-                        "text": extracted_text,
-                        "result": result[0],
-                        "perplexity": result[1],
-                        "burstiness": result[2],
-                        "interpretation": result[3] if len(result) > 3 else "No interpretation available"
-                    })
+                    # Add page number and append to the combined text
+                    all_extracted_text += f"\n\n--- Page {image_count+1} ---\n\n"
+                    all_extracted_text += extracted_text
+                    image_count += 1
+                    
                 except Exception as e:
                     error_message = str(e)
-                    print(f"Error processing image: {e}")
+                    print(f"Error extracting text from image: {e}")
                     error_occurred = True
                     continue
-        
-        # Calculate summary statistics
-        if not batch_results:
-            error_msg = "No valid results from batch processing"
-            if error_occurred:
-                error_msg += f"\nError: {error_message}"
             
-            shared_result = {
-                "status": "error",
-                "message": error_msg
-            }
-            print("Batch processing complete but no valid results were obtained")
-            self.show_error_dialog("Batch Processing Failed", error_msg)
-            self.stop_batch_mode()
-            return
-        
-        ai_count = sum(1 for r in batch_results if "AI-generated" in r["result"])
-        human_count = len(batch_results) - ai_count
-        
-        # Update shared result with batch summary
-        shared_result = {
-            "status": "batch_complete",
-            "total_images": len(batch_results),
-            "ai_detected": ai_count,
-            "human_detected": human_count,
-            "details": batch_results
-        }
-        
-        print(f"Batch processing complete. AI detected in {ai_count}/{len(batch_results)} images")
-        
-        # Show warning if some images failed
-        if error_occurred:
-            self.show_error_dialog("Partial Batch Processing", 
-                                  f"Processed {len(batch_results)} out of {queue_size} images.\n"
-                                  f"Some images could not be processed due to errors.\n"
-                                  f"Last error: {error_message}")
+            # Check if we have any text to process
+            if not all_extracted_text or len(all_extracted_text.strip()) < 10:
+                self.close_progress_dialog()
+                error_msg = "No meaningful text extracted from any images in the batch"
+                if error_occurred:
+                    error_msg += f"\nError: {error_message}"
+                
+                print(error_msg)
+                self.show_error_dialog("Batch Processing Failed", error_msg)
+                self.stop_batch_mode()
+                return
+            
+            # Process the combined text with the AI detector
+            try:
+                print(f"Analyzing combined text from {image_count} images")
+                result = self.detector.detect_ai_text(all_extracted_text)
+                
+                # Close progress dialog
+                self.close_progress_dialog()
+                
+                # Display results in a message box
+                result_text = f"Document Analysis Complete\n\n"
+                result_text += f"Images processed: {image_count}\n"
+                result_text += f"Result: {result[0]}\n"
+                result_text += f"Perplexity: {result[1]:.2f}\n"
+                result_text += f"Burstiness: {result[2]:.2f}\n\n"
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
+                
+                # Add a preview of the extracted text
+                result_text += f"Extracted Text Preview:\n{all_extracted_text[:300]}"
+                if len(all_extracted_text) > 300:
+                    result_text += "..."
+                
+                self.show_message_dialog("Batch Analysis Results", result_text)
+                print(f"Batch processing complete. Result: {result[0]}")
+                
+            except Exception as e:
+                self.close_progress_dialog()
+                error_msg = f"Error analyzing combined text: {str(e)}"
+                print(error_msg)
+                self.show_error_dialog("Analysis Error", error_msg)
         
         # Return to normal mode after processing
         self.stop_batch_mode()
@@ -218,16 +248,20 @@ class MainWindow(QtWidgets.QMainWindow):
         print("Batch mode deactivated.")
 
     def load_file(self):
-        global shared_result
-
         # Get the file path from the lineEdit widget
         file_path = self.ui.lineEdit.text()
 
         try:
+            # Show progress dialog
+            self.show_progress_dialog("Processing File", 
+                                     "Loading and analyzing file...\n"
+                                     "AI plagiarism detection in progress. Please wait.")
+            
             # Load the image using OpenCV
             image_array = cv2.imread(file_path)
 
             if image_array is None:
+                self.close_progress_dialog()
                 raise FileNotFoundError("Could not load the image from the provided path.")
 
             # Process the loaded image
@@ -240,11 +274,26 @@ class MainWindow(QtWidgets.QMainWindow):
             result = self.detector.detect_ai_text(extracted_text)
             print(result)
 
-            # Update the shared result
-            shared_result = {"status": "success", "result": result[0], "perplexity": result[1], "burstiness": result[2], "intrp": result[3]}
+            # Close progress dialog
+            self.close_progress_dialog()
+
+            # Display results in a message box
+            result_text = f"File: {file_path}\n\n"
+            result_text += f"Result: {result[0]}\n"
+            result_text += f"Perplexity: {result[1]:.2f}\n"
+            result_text += f"Burstiness: {result[2]:.2f}\n\n"
+            result_text += f"Interpretation: {result[3]}\n\n"
+            result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
+            if len(extracted_text) > 300:
+                result_text += "..."
+            
+            self.show_message_dialog("File Analysis Results", result_text)
+            
         except Exception as e:
-            print(f"Error loading file: {e}")
-            shared_result = {"status": "error", "result": str(e)}
+            self.close_progress_dialog()
+            error_msg = f"Error loading file: {e}"
+            print(error_msg)
+            self.show_error_dialog("File Loading Error", error_msg)
 
     def capture_image(self):
         # Create and start the capture thread
@@ -252,25 +301,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture_thread.capture_done.connect(self.on_capture_done)
         self.capture_thread.start()
 
-    # def on_capture_done(self, image_array):
-    #     global shared_result
-
-    #     # Use ImageTextExtractor to extract text from the image array
-    #     extractor = ImageTextExtractor(image_array)
-    #     extracted_text = extractor.extract_text()
-    #     print("Extracted Text:")
-    #     print(extracted_text)
-        
-    #     # Use AITextDetector to check if the extracted text is AI-generated
-    #     result = self.detector.detect_ai_text(extracted_text)
-    #     print(result)
-
-    #     # Update the shared result
-    #     shared_result = {"status": "success", "result": result[0], "perplexity": result[1], "burstiness": result[2], "intrp": result[3]}
-    
     def on_capture_done(self, image_array):
         """Handle captured image based on current mode"""
-        global shared_result
         
         if self.batch_mode:
             # In batch mode, add to queue instead of processing immediately
@@ -279,39 +311,59 @@ class MainWindow(QtWidgets.QMainWindow):
                 queue_size = self.image_queue.qsize()
                 
             print(f"Added image to batch. Queue size: {queue_size}")
-            shared_result = {
-                "status": "batch_update", 
-                "message": f"Image added to batch. Total: {queue_size}"
-            }
+            self.show_message_dialog(
+                "Batch Processing", 
+                f"Added image {queue_size} to batch.\n\n"
+                f"Capture more images to add to the document, then click 'Next' to process the entire document."
+            )
         else:
             # In single capture mode, process immediately as before
-            extractor = ImageTextExtractor(image_array)
-            extracted_text = extractor.extract_text()
-            print("Extracted Text:")
-            print(extracted_text)
-            
-            # Use AITextDetector to check if the extracted text is AI-generated
-            result = self.detector.detect_ai_text(extracted_text)
-            print(result)
+            try:
+                # Show progress dialog
+                self.show_progress_dialog("Processing", "AI plagiarism detection in progress...\nPlease wait.")
+                
+                extractor = ImageTextExtractor(image_array)
+                extracted_text = extractor.extract_text()
+                
+                if not extracted_text or len(extracted_text.strip()) < 5:
+                    self.close_progress_dialog()
+                    error_msg = "No meaningful text extracted from image"
+                    print(error_msg)
+                    self.show_error_dialog("Text Extraction Error", error_msg)
+                    return
+                    
+                print("Extracted Text:")
+                print(extracted_text)
+                
+                # Use AITextDetector to check if the extracted text is AI-generated
+                result = self.detector.detect_ai_text(extracted_text)
+                print(result)
 
-            # Update the shared result
-            shared_result = {
-                "status": "success", 
-                "result": result[0], 
-                "perplexity": result[1], 
-                "burstiness": result[2], 
-                "intrp": result[3]
-            }
+                # Close progress dialog
+                self.close_progress_dialog()
 
-def run_flask():
-    # Start Flask app on a separate thread
-    app.run(host='0.0.0.0', port=5000)
+                # Display results in a message box
+                result_text = f"Result: {result[0]}\n\n"
+                result_text += f"Perplexity: {result[1]:.2f}\n"
+                result_text += f"Burstiness: {result[2]:.2f}\n\n"
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
+                result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
+                if len(extracted_text) > 300:
+                    result_text += "..."
+                
+                self.show_message_dialog("Analysis Results", result_text)
+                
+            except Exception as e:
+                self.close_progress_dialog()
+                error_msg = f"Error processing image: {str(e)}"
+                print(error_msg)
+                self.show_error_dialog("Processing Error", error_msg)
+
+# Remove run_flask function
 
 if __name__ == "__main__":
-    # Start Flask server in a separate thread
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-
+    # Remove Flask thread
+    
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
     window.show()
