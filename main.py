@@ -368,11 +368,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.ui.lblBatchSizeVal.setText(str(queue_size))
         
             print(f"Added image to batch. Queue size: {queue_size}")
-            self.show_message_dialog(
-                "Batch Processing", 
-                f"Added image {queue_size} to batch.\n\n"
-                f"Capture more images to add to the document, then click 'Process' to analyze the entire document."
-            )
+            # Remove the message dialog - the label is sufficient feedback
         else:
             # In single capture mode, process immediately as before
             try:
