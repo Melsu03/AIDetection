@@ -175,6 +175,9 @@ class MainWindow(QtWidgets.QMainWindow):
                                      f"Processing {queue_size} images as a single document...\n"
                                      f"AI plagiarism detection in progress. Please wait.")
             
+            # Force UI update to ensure dialog appears immediately
+            QtWidgets.QApplication.processEvents()
+            
             print(f"Processing {queue_size} images as a single document")
             
             # Extract text from all images and concatenate
@@ -190,6 +193,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 try:
                     image_array = self.image_queue.get()
                     temp_queue.put(image_array)  # Save image for potential debugging
+                    
+                    # Update progress dialog with current image being processed
+                    if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                        self.progress_dialog.setText(f"Processing image {image_count+1} of {queue_size}...\n"
+                                                   f"Extracting text. Please wait.")
+                        QtWidgets.QApplication.processEvents()
                     
                     # Extract text from the image
                     extractor = ImageTextExtractor(image_array)
@@ -225,6 +234,12 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Process the combined text with the AI detector
             try:
+                # Update progress dialog for AI detection
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText(f"Analyzing combined text from {image_count} images...\n"
+                                               f"AI plagiarism detection in progress. Please wait.")
+                    QtWidgets.QApplication.processEvents()
+                
                 print(f"Analyzing combined text from {image_count} images")
                 result = self.detector.detect_ai_text(all_extracted_text)
                 
