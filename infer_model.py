@@ -244,3 +244,5 @@ class AIPlagiarismDetector:
                 report += f"- {sentence} ({prob:.1f}%)\n"
         
         return report
+
+

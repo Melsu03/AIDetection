@@ -136,7 +136,11 @@ class MainWindow(QtWidgets.QMainWindow):
             # Create a text edit widget for the highlighted text
             text_edit = QTextEdit()
             text_edit.setReadOnly(True)
-            text_edit.setPlainText(highlighted_text)
+            
+            # Convert the highlighted text to HTML with colored text
+            html_text = self.convert_highlighted_text_to_html(highlighted_text)
+            text_edit.setHtml(html_text)
+            
             layout.addWidget(text_edit)
             
             # Add a close button
@@ -152,6 +156,29 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Show the message box
         msg_box.exec_()
+
+    def convert_highlighted_text_to_html(self, highlighted_text):
+        """Convert the highlighted text with [AI: xx%] and [Human: xx%] markers to HTML with colored text"""
+        import re
+        
+        # Replace [AI: xx%] markers with HTML span tags with red color
+        html_text = re.sub(
+            r'\[AI: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
+            r'<span style="color:red; font-weight:bold;">[AI: \1%]</span> <span style="color:red;">\2</span>', 
+            highlighted_text
+        )
+        
+        # Replace [Human: xx%] markers with HTML span tags with green color
+        html_text = re.sub(
+            r'\[Human: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
+            r'<span style="color:green; font-weight:bold;">[Human: \1%]</span> <span style="color:green;">\2</span>', 
+            html_text
+        )
+        
+        # Wrap the entire text in a paragraph tag
+        html_text = f"<p>{html_text}</p>"
+        
+        return html_text
 
     def show_progress_dialog(self, title, message):
         """Display a non-blocking progress message"""
