@@ -162,6 +162,7 @@ class MainWindow(QtWidgets.QMainWindow):
         import re
         
         # Replace [AI: xx%] markers with HTML span tags with red color
+        # The pattern needs to match all text between an AI marker and the next marker or end of text
         html_text = re.sub(
             r'\[AI: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
             r'<span style="color:red; font-weight:bold;">[AI: \1%]</span> <span style="color:red;">\2</span>', 
