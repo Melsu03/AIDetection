@@ -587,6 +587,54 @@ class MainWindow(QtWidgets.QMainWindow):
                 print(error_msg)
                 self.show_error_dialog("Processing Error", error_msg)
 
+    def batch_take_action(self):
+        """Handle the batch take button action based on current mode"""
+        if self.batch_file_mode:
+            # In batch file mode, open file dialog
+            self.load_file_to_batch()
+        else:
+            # In batch camera mode, capture image
+            self.capture_image()
+
+    def load_file_to_batch(self):
+        """Load a file and add it to the batch queue"""
+        # Open file dialog to select an image file
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            "",  # Start in the current directory
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
+        )
+        
+        # If user cancels the dialog, file_path will be empty
+        if not file_path:
+            return
+        
+        # Update the lineEdit with the selected file path
+        self.ui.lineEdit.setText(file_path)
+        
+        try:
+            # Load the image using OpenCV
+            image_array = cv2.imread(file_path)
+
+            if image_array is None:
+                raise FileNotFoundError("Could not load the image from the provided path.")
+
+            # Add the image to the batch queue
+            with self.queue_lock:
+                self.image_queue.put(image_array)
+                queue_size = self.image_queue.qsize()
+            
+            # Update batch size label
+            self.ui.lblBatchSizeVal.setText(str(queue_size))
+            
+            print(f"Added file to batch: {file_path}. Queue size: {queue_size}")
+            
+        except Exception as e:
+            error_msg = f"Error loading file: {e}"
+            print(error_msg)
+            self.show_error_dialog("File Loading Error", error_msg)
+
 # Remove run_flask function
 
 if __name__ == "__main__":
