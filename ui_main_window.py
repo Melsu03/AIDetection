@@ -74,6 +74,6 @@ class QtMainWindow(object):
         self.btnSingleCap.setText(_translate("MainWindow", "Single Capture"))
         self.btnFromFile.setText(_translate("MainWindow", "File"))
         self.btnBatchCap.setText(_translate("MainWindow", "Batch Capture"))
-        self.btnBatchTake.setText(_translate("MainWindow", "Detect"))
-        self.btnBatchNext.setText(_translate("MainWindow", "Next"))
+        self.btnBatchTake.setText(_translate("MainWindow", "Capture"))
+        self.btnBatchNext.setText(_translate("MainWindow", "Process"))
         self.btnBatchStop.setText(_translate("MainWindow", "Stop"))
