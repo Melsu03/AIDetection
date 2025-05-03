@@ -67,8 +67,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Connect btnFromFile to the load_file method
         self.ui.btnFromFile.setText("Browse...")  # Change button text to be more intuitive
         self.ui.btnFromFile.clicked.connect(self.load_file)
-        self.ui.fldFilePath.setPlaceholderText("Selected image file path will appear here")
-        self.ui.fldFilePath.setReadOnly(True)  # Make it read-only since we're using file dialog
+        self.ui.lineEdit.setPlaceholderText("Selected image file path will appear here")
+        self.ui.lineEdit.setReadOnly(True)  # Make it read-only since we're using file dialog
 
         # Add batch processing components
         self.image_queue = Queue()
@@ -412,7 +412,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         
         # Update the lineEdit with the selected file path
-        self.ui.fldFilePath.setText(file_path)
+        self.ui.lineEdit.setText(file_path)
         
         # Show progress dialog immediately
         self.show_progress_dialog("Processing File", 

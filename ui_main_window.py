@@ -34,7 +34,7 @@ class QtMainWindow(object):
         self.btnSingleCap.setObjectName("btnSingleCap")
         self.lineEdit = QtWidgets.QLineEdit(self.centralwidget)
         self.lineEdit.setGeometry(QtCore.QRect(450, 360, 341, 21))
-        self.lineEdit.setObjectName("fldFilePath")
+        self.lineEdit.setObjectName("lineEdit")
         self.btnFromFile = QtWidgets.QPushButton(self.centralwidget)
         self.btnFromFile.setGeometry(QtCore.QRect(450, 10, 341, 51))
         self.btnFromFile.setDefault(False)
