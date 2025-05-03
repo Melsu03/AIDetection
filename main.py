@@ -73,10 +73,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.image_queue = Queue()
         self.queue_lock = Lock()
         self.batch_mode = False
+        self.batch_file_mode = False  # New flag for batch file mode
         
         # Connect batch processing buttons that are already in the UI
         self.ui.btnBatchCap.clicked.connect(self.toggle_batch_mode)
-        self.ui.btnBatchTake.clicked.connect(self.capture_image)
+        self.ui.btnFromFileBatch.clicked.connect(self.toggle_batch_file_mode)  # Connect new batch file button
+        self.ui.btnBatchTake.clicked.connect(self.batch_take_action)  # Use a new method that handles both modes
         self.ui.btnBatchNext.clicked.connect(self.process_batch)
         self.ui.btnBatchStop.clicked.connect(self.stop_batch_mode)
 
@@ -268,7 +270,45 @@ class MainWindow(QtWidgets.QMainWindow):
             "2. When all pages are captured, click 'Process' to analyze the entire document.\n"
             "3. Click 'Stop' to exit batch mode without processing."
         )
-    
+
+    def toggle_batch_file_mode(self):
+        """Toggle batch file capture mode"""
+        self.batch_mode = True
+        self.batch_file_mode = True
+        
+        # Show batch operation buttons, hide single capture buttons
+        self.ui.btnSingleCap.hide()
+        self.ui.btnBatchCap.hide()
+        self.ui.btnFromFile.hide()
+        self.ui.btnFromFileBatch.hide()
+        self.ui.btnBatchTake.show()
+        self.ui.btnBatchNext.show()
+        self.ui.btnBatchStop.show()
+        
+        # Change the text of btnBatchTake to "Browse"
+        self.ui.btnBatchTake.setText("Browse...")
+        
+        # Show batch size labels
+        self.ui.lblBatchSize.show()
+        self.ui.lblBatchSizeVal.show()
+        self.ui.lblBatchSizeVal.setText("0")  # Reset batch size counter
+        
+        # Clear any existing queue
+        with self.queue_lock:
+            while not self.image_queue.empty():
+                self.image_queue.get()
+        
+        print("Batch file mode activated. Add image files and then process them.")
+        
+        # Show a message dialog
+        self.show_message_dialog(
+            "Batch File Mode", 
+            "Batch file mode activated.\n\n"
+            "1. Click 'Browse' to add image files to the batch.\n"
+            "2. When all files are added, click 'Process' to analyze the entire document.\n"
+            "3. Click 'Stop' to exit batch mode without processing."
+        )
+
     def process_batch(self):
         """Process all images in the queue as a single document"""
         
