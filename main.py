@@ -130,7 +130,11 @@ class MainWindow(QtWidgets.QMainWindow):
             # Create a custom dialog for the highlighted text
             highlight_dialog = QDialog(self)
             highlight_dialog.setWindowTitle("Sentence-by-Sentence Analysis")
-            highlight_dialog.setMinimumSize(800, 600)
+            
+            # Get the main window size and limit the dialog height
+            main_window_height = self.height()  # Get current main window height
+            highlight_dialog.setMinimumSize(800, min(600, main_window_height - 60))  # Limit height to main window height minus some margin
+            highlight_dialog.setMaximumHeight(main_window_height - 60)  # Set maximum height
             
             layout = QVBoxLayout()
             
@@ -286,7 +290,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchStop.show()
         
         # Change the text of btnBatchTake to "Browse"
-        self.ui.btnBatchTake.setText("Browse...")
+        self.ui.btnBatchTake.setText("Browse")
         
         # Show batch size labels
         self.ui.lblBatchSize.show()
