@@ -132,9 +132,9 @@ class MainWindow(QtWidgets.QMainWindow):
             highlight_dialog.setWindowTitle("Sentence-by-Sentence Analysis")
             
             # Get the main window size and limit the dialog height
-            main_window_height = self.height()  # Get current main window height
-            highlight_dialog.setMinimumSize(800, min(600, main_window_height - 60))  # Limit height to main window height minus some margin
-            highlight_dialog.setMaximumHeight(main_window_height - 60)  # Set maximum height
+            main_window_height = 460  # Fixed height of 460 pixels
+            highlight_dialog.setMinimumSize(800, min(400, main_window_height - 60))
+            highlight_dialog.setMaximumHeight(main_window_height - 60)
             
             layout = QVBoxLayout()
             
@@ -155,11 +155,20 @@ class MainWindow(QtWidgets.QMainWindow):
             
             highlight_dialog.setLayout(layout)
             
+            # Create a function to show the sentence analysis dialog
+            # This ensures the original message box stays open
+            def show_sentence_analysis():
+                highlight_dialog.exec_()  # Modal dialog - blocks until closed
+                # No need to do anything after closing - control returns to message box
+            
             # Add a button to the message box to show the highlighted text
             highlight_button = msg_box.addButton("Show Sentence Analysis", QMessageBox.ActionRole)
-            highlight_button.clicked.connect(highlight_dialog.exec_)
+            highlight_button.clicked.connect(show_sentence_analysis)
         
-        # Show the message box
+        # Add standard OK button
+        msg_box.addButton(QMessageBox.Ok)
+        
+        # Show the message box and wait for user response
         msg_box.exec_()
 
     def convert_highlighted_text_to_html(self, highlighted_text):
