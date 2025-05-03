@@ -5,7 +5,7 @@ from picamera2 import Picamera2, controls
 from picamera2.previews.qt import QGlPicamera2
 import cv2
 import numpy as np
-from ui_main_window3 import QtMainWindow
+from ui_main_window import QtMainWindow
 from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
 from infer_model2 import AIPlagiarismDetector  # Import the AITextDetector class
 from flask import Flask, jsonify
