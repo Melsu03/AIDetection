@@ -161,25 +161,42 @@ class MainWindow(QtWidgets.QMainWindow):
         """Convert the highlighted text with [AI: xx%] markers to HTML with red color for AI text only"""
         import re
         
-        # Replace [AI: xx%] markers with HTML span tags with red color
-        # The pattern needs to match all text between an AI marker and the next marker or end of text
-        html_text = re.sub(
-            r'\[AI: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
-            r'<span style="color:red; font-weight:bold;">[AI: \1%]</span> <span style="color:red;">\2</span>', 
-            highlighted_text
-        )
+        # Find all markers and their positions
+        ai_markers = [(m.start(), m.group()) for m in re.finditer(r'\[AI: \d+\.\d+%\]', highlighted_text)]
+        human_markers = [(m.start(), m.group()) for m in re.finditer(r'\[Human: \d+\.\d+%\]', highlighted_text)]
         
-        # Replace [Human: xx%] markers but keep the text in default color
-        html_text = re.sub(
-            r'\[Human: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
-            r'<span style="font-weight:bold;">[Human: \1%]</span> \2', 
-            html_text
-        )
+        # Combine and sort all markers by position
+        all_markers = sorted(ai_markers + human_markers)
         
-        # Wrap the entire text in a paragraph tag
-        html_text = f"<p>{html_text}</p>"
+        # If no markers found, return the original text
+        if not all_markers:
+            return f"<p>{highlighted_text}</p>"
         
-        return html_text
+        # Process text between markers
+        result = []
+        for i, (pos, marker) in enumerate(all_markers):
+            # Get the text after this marker until the next marker or end of text
+            if i < len(all_markers) - 1:
+                next_pos = all_markers[i+1][0]
+                text = highlighted_text[pos:next_pos]
+            else:
+                text = highlighted_text[pos:]
+            
+            # Format based on marker type
+            if marker.startswith('[AI:'):
+                # AI text in red
+                result.append(f'<span style="color:red; font-weight:bold;">{marker}</span> <span style="color:red;">{text[len(marker):]}</span>')
+            else:
+                # Human text in default color
+                result.append(f'<span style="font-weight:bold;">{marker}</span>{text[len(marker):]}')
+        
+        # Add any text before the first marker
+        if all_markers[0][0] > 0:
+            prefix = highlighted_text[:all_markers[0][0]]
+            result.insert(0, prefix)
+        
+        # Combine and wrap in paragraph
+        return f"<p>{''.join(result)}</p>"
 
     def show_progress_dialog(self, title, message):
         """Display a non-blocking progress message"""
