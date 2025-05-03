@@ -65,7 +65,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnSingleCap.clicked.connect(self.capture_image)
         
         # Connect btnFromFile to the load_file method
-        self.ui.btnFromFile.setText("Browse...")  # Change button text to be more intuitive
         self.ui.btnFromFile.clicked.connect(self.load_file)
         self.ui.lineEdit.setPlaceholderText("Selected image file path will appear here")
         self.ui.lineEdit.setReadOnly(True)  # Make it read-only since we're using file dialog
