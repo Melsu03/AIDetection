@@ -158,7 +158,7 @@ class MainWindow(QtWidgets.QMainWindow):
         msg_box.exec_()
 
     def convert_highlighted_text_to_html(self, highlighted_text):
-        """Convert the highlighted text with [AI: xx%] and [Human: xx%] markers to HTML with colored text"""
+        """Convert the highlighted text with [AI: xx%] markers to HTML with red color for AI text only"""
         import re
         
         # Replace [AI: xx%] markers with HTML span tags with red color
@@ -168,10 +168,10 @@ class MainWindow(QtWidgets.QMainWindow):
             highlighted_text
         )
         
-        # Replace [Human: xx%] markers with HTML span tags with green color
+        # Replace [Human: xx%] markers but keep the text in default color
         html_text = re.sub(
             r'\[Human: (\d+\.\d+)%\] (.*?)(?=\[AI:|\[Human:|\Z)', 
-            r'<span style="color:green; font-weight:bold;">[Human: \1%]</span> <span style="color:green;">\2</span>', 
+            r'<span style="font-weight:bold;">[Human: \1%]</span> \2', 
             html_text
         )
         
