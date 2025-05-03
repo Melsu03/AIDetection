@@ -130,6 +130,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Create a custom dialog for the highlighted text
             highlight_dialog = QDialog(self)
             highlight_dialog.setWindowTitle("Sentence-by-Sentence Analysis")
+            highlight_dialog.setWindowModality(Qt.ApplicationModal)  # Make it application modal
             
             # Get the main window size and limit the dialog height
             main_window_height = 460  # Fixed height of 460 pixels
@@ -158,8 +159,14 @@ class MainWindow(QtWidgets.QMainWindow):
             # Create a function to show the sentence analysis dialog
             # This ensures the original message box stays open
             def show_sentence_analysis():
-                highlight_dialog.exec_()  # Modal dialog - blocks until closed
-                # No need to do anything after closing - control returns to message box
+                # Hide the message box temporarily (don't close it)
+                msg_box.setVisible(False)
+                
+                # Show the highlight dialog and wait for it to close
+                highlight_dialog.exec_()
+                
+                # Show the message box again after the highlight dialog is closed
+                msg_box.setVisible(True)
             
             # Add a button to the message box to show the highlighted text
             highlight_button = msg_box.addButton("Show Sentence Analysis", QMessageBox.ActionRole)
