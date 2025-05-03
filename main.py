@@ -217,11 +217,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
                 
-                # Add a preview of the extracted text
-                result_text += f"Extracted Text Preview:\n{all_extracted_text[:300]}"
-                if len(all_extracted_text) > 300:
-                    result_text += "..."
-                
                 self.show_message_dialog("Batch Analysis Results", result_text)
                 print(f"Batch processing complete. Result: {result[0]}")
                 
@@ -283,9 +278,6 @@ class MainWindow(QtWidgets.QMainWindow):
             result_text += f"Perplexity: {result[1]:.2f}\n"
             result_text += f"Burstiness: {result[2]:.2f}\n\n"
             result_text += f"Interpretation: {result[3]}\n\n"
-            result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
-            if len(extracted_text) > 300:
-                result_text += "..."
             
             self.show_message_dialog("File Analysis Results", result_text)
             
@@ -347,9 +339,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
-                result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
-                if len(extracted_text) > 300:
-                    result_text += "..."
                 
                 self.show_message_dialog("Analysis Results", result_text)
                 
