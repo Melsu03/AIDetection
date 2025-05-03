@@ -423,10 +423,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def stop_batch_mode(self):
         """Exit batch mode and return to normal operation"""
         self.batch_mode = False
+        self.batch_file_mode = False
         
         # Show normal buttons, hide batch operation buttons
         self.ui.btnSingleCap.show()
         self.ui.btnBatchCap.show()
+        self.ui.btnFromFile.show()
+        self.ui.btnFromFileBatch.show()
         self.ui.btnBatchTake.hide()
         self.ui.btnBatchNext.hide()
         self.ui.btnBatchStop.hide()
