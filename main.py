@@ -14,7 +14,7 @@ from threading import Lock
 from PyQt5.QtWidgets import QMessageBox
 
 try:
-    from infer_model import AdvancedAIPlagiarismDetector
+    from infer_model import AIPlagiarismDetector as AdvancedAIPlagiarismDetector
     from infer_model2 import AIPlagiarismDetector as BasicAIPlagiarismDetector
 except ImportError as e:
     print(f"Import error: {e}")
