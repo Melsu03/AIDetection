@@ -68,6 +68,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnFromFile.clicked.connect(self.load_file)
         self.ui.lineEdit.setPlaceholderText("Selected image file path will appear here")
         self.ui.lineEdit.setReadOnly(True)  # Make it read-only since we're using file dialog
+        self.ui.lineEdit.hide()  # Initially hide the lineEdit
 
         # Add batch processing components
         self.image_queue = Queue()
@@ -270,6 +271,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchNext.show()
         self.ui.btnBatchStop.show()
         
+        # Hide the lineEdit as it's not needed in camera batch mode
+        self.ui.lineEdit.hide()
+        
         # Show batch size labels
         self.ui.lblBatchSize.show()
         self.ui.lblBatchSizeVal.show()
@@ -305,8 +309,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.btnBatchNext.show()
         self.ui.btnBatchStop.show()
         
-        # Change the text of btnBatchTake to "Browse"
-        self.ui.btnBatchTake.setText("Browse")
+        # Show the lineEdit for file paths
+        self.ui.lineEdit.show()
+        
+        # Change the text of btnBatchTake to "Browse..."
+        self.ui.btnBatchTake.setText("Browse...")
         
         # Show batch size labels
         self.ui.lblBatchSize.show()
@@ -458,6 +465,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.lblBatchSize.hide()
         self.ui.lblBatchSizeVal.hide()
         
+        # Hide the lineEdit when returning to normal mode
+        self.ui.lineEdit.hide()
+        
         print("Batch mode deactivated.")
 
     def load_file(self):
@@ -473,8 +483,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not file_path:
             return
         
-        # Update the lineEdit with the selected file path
+        # Update the lineEdit with the selected file path and show it
         self.ui.lineEdit.setText(file_path)
+        self.ui.lineEdit.show()
         
         # Show progress dialog immediately
         self.show_progress_dialog("Processing File", 
@@ -635,6 +646,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Update the lineEdit with the selected file path
         self.ui.lineEdit.setText(file_path)
+        self.ui.lineEdit.show()  # Ensure lineEdit is visible
         
         try:
             # Load the image using OpenCV
