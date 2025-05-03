@@ -94,21 +94,34 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_progress_dialog(self, title, message):
         """Display a non-blocking progress message"""
+        # Close any existing progress dialog first
+        self.close_progress_dialog()
+        
+        # Create and show new progress dialog
         self.progress_dialog = QMessageBox(self)
         self.progress_dialog.setIcon(QMessageBox.Information)
         self.progress_dialog.setWindowTitle(title)
         self.progress_dialog.setText(message)
         self.progress_dialog.setStandardButtons(QMessageBox.NoButton)
+        
         # Show the dialog without blocking
         self.progress_dialog.show()
+        
         # Process events to ensure the dialog is displayed
         QtWidgets.QApplication.processEvents()
     
     def close_progress_dialog(self):
         """Close the progress dialog if it exists"""
         if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
-            self.progress_dialog.close()
-            self.progress_dialog = None
+            try:
+                self.progress_dialog.close()
+            except Exception as e:
+                print(f"Error closing progress dialog: {e}")
+            finally:
+                self.progress_dialog = None
+        
+        # Process events to ensure UI updates
+        QtWidgets.QApplication.processEvents()
 
     def toggle_batch_mode(self):
         """Toggle between single capture and batch capture modes"""
@@ -301,7 +314,7 @@ class MainWindow(QtWidgets.QMainWindow):
             with self.queue_lock:
                 self.image_queue.put(image_array)
                 queue_size = self.image_queue.qsize()
-                
+            
             print(f"Added image to batch. Queue size: {queue_size}")
             self.show_message_dialog(
                 "Batch Processing", 
@@ -318,7 +331,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 extracted_text = extractor.extract_text()
                 
                 if not extracted_text or len(extracted_text.strip()) < 5:
-                    self.close_progress_dialog()
+                    self.close_progress_dialog()  # Ensure dialog is closed
                     error_msg = "No meaningful text extracted from image"
                     print(error_msg)
                     self.show_error_dialog("Text Extraction Error", error_msg)
@@ -331,7 +344,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 result = self.detector.detect_ai_text(extracted_text)
                 print(result)
 
-                # Close progress dialog
+                # Close progress dialog before showing results
                 self.close_progress_dialog()
 
                 # Display results in a message box
@@ -339,10 +352,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
                 result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
+                result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
+                if len(extracted_text) > 300:
+                    result_text += "..."
                 
                 self.show_message_dialog("Analysis Results", result_text)
                 
             except Exception as e:
+                # Ensure dialog is closed even on exception
                 self.close_progress_dialog()
                 error_msg = f"Error processing image: {str(e)}"
                 print(error_msg)
