@@ -222,13 +222,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Close progress dialog
                 self.close_progress_dialog()
                 
-                # Display results in a message box
+                # Display results in a message box (without text preview)
                 result_text = f"Document Analysis Complete\n\n"
                 result_text += f"Images processed: {image_count}\n"
                 result_text += f"Result: {result[0]}\n"
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
-                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
                 
                 self.show_message_dialog("Batch Analysis Results", result_text)
                 print(f"Batch processing complete. Result: {result[0]}")
@@ -285,12 +285,12 @@ class MainWindow(QtWidgets.QMainWindow):
             # Close progress dialog
             self.close_progress_dialog()
 
-            # Display results in a message box
+            # Display results in a message box (without text preview)
             result_text = f"File: {file_path}\n\n"
             result_text += f"Result: {result[0]}\n"
             result_text += f"Perplexity: {result[1]:.2f}\n"
             result_text += f"Burstiness: {result[2]:.2f}\n\n"
-            result_text += f"Interpretation: {result[3]}\n\n"
+            result_text += f"Interpretation: {result[3]}"
             
             self.show_message_dialog("File Analysis Results", result_text)
             
@@ -347,14 +347,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Close progress dialog before showing results
                 self.close_progress_dialog()
 
-                # Display results in a message box
+                # Display results in a message box (without text preview)
                 result_text = f"Result: {result[0]}\n\n"
                 result_text += f"Perplexity: {result[1]:.2f}\n"
                 result_text += f"Burstiness: {result[2]:.2f}\n\n"
-                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}\n\n"
-                result_text += f"Extracted Text Preview:\n{extracted_text[:300]}"
-                if len(extracted_text) > 300:
-                    result_text += "..."
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
                 
                 self.show_message_dialog("Analysis Results", result_text)
                 
