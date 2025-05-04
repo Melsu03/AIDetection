@@ -340,7 +340,7 @@ class MainWindow(QtWidgets.QMainWindow):
             "Batch file mode activated.\n\n"
             "1. Click 'Browse' to add image files to the batch.\n"
             "2. When all files are added, click 'Process' to analyze the entire document.\n"
-            "3. Click 'Stop' to exit batch mode without processing."
+            "3. Click 'Cancel' to exit batch mode without processing."
         )
 
     def process_batch(self):
@@ -677,11 +677,7 @@ class MainWindow(QtWidgets.QMainWindow):
             print(error_msg)
             self.show_error_dialog("File Loading Error", error_msg)
 
-# Remove run_flask function
-
 if __name__ == "__main__":
-    # Remove Flask thread
-    
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
     window.show()
