@@ -142,25 +142,25 @@ class ImageTextExtractor:
             
             # Approach 1: Document detection with perspective correction
             processed_img = self.preprocess_document(self.img_source)
-            custom_config = r'--oem 3 --psm 6 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            custom_config = r'--oem 3 --psm 6 -l eng --tessdata-dir /usr/share/tesseract-ocr/5/tessdata'
             results.append(pytesseract.image_to_string(processed_img, config=custom_config))
             
             # Approach 2: Adaptive thresholding
             gray = self.get_grayscale(self.img_source)
             thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                           cv2.THRESH_BINARY, 11, 2)
-            custom_config = r'--oem 3 --psm 1 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            custom_config = r'--oem 3 --psm 1 -l eng --tessdata-dir /usr/share/tesseract-ocr/5/tessdata'
             results.append(pytesseract.image_to_string(thresh, config=custom_config))
             
             # Approach 3: Binarization with Otsu's method
             _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            custom_config = r'--oem 3 --psm 3 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            custom_config = r'--oem 3 --psm 3 -l eng --tessdata-dir /usr/share/tesseract-ocr/5/tessdata'
             results.append(pytesseract.image_to_string(binary, config=custom_config))
             
             # Approach 4: Contrast enhancement
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
             enhanced = clahe.apply(gray)
-            custom_config = r'--oem 3 --psm 4 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            custom_config = r'--oem 3 --psm 4 -l eng --tessdata-dir /usr/share/tesseract-ocr/5/tessdata'
             results.append(pytesseract.image_to_string(enhanced, config=custom_config))
             
             # Find the longest result with the most words
@@ -179,7 +179,7 @@ class ImageTextExtractor:
             
             # If all approaches failed, try one last approach with different parameters
             print("All standard approaches failed, trying specialized configuration...")
-            custom_config = r'--oem 1 --psm 12 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            custom_config = r'--oem 1 --psm 12 -l eng --tessdata-dir /usr/share/tesseract-ocr/5/tessdata'
             last_result = pytesseract.image_to_string(self.img_source, config=custom_config)
             
             return self.post_process_text(last_result)
