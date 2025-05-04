@@ -260,6 +260,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # Process events to ensure UI updates
         QtWidgets.QApplication.processEvents()
 
+    def show_error_dialog(self, title, message):
+        """Show an error dialog with the given title and message"""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.addButton(QMessageBox.Ok)
+        msg_box.exec_()
+
     def toggle_batch_mode(self):
         """Toggle between single capture and batch capture modes"""
         self.batch_mode = True
@@ -351,7 +362,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
             if queue_size == 0:
                 print("No images in batch to process")
-                self.show_error_dialog("Batch Processing Error", "No images in batch to process")
+                self.show_message_dialog("Batch Processing Error", "No images in batch to process")  # Changed from show_error_dialog
                 return
             
             # Show progress dialog
@@ -591,7 +602,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.close_progress_dialog()  # Ensure dialog is closed
                     error_msg = "No meaningful text extracted from image"
                     print(error_msg)
-                    self.show_error_dialog("Text Extraction Error", error_msg)
+                    self.show_message_dialog("Text Extraction Error", error_msg)  # Changed from show_error_dialog
                     return
                 
                 # Update progress dialog for AI detection step
@@ -626,7 +637,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.close_progress_dialog()
                 error_msg = f"Error processing image: {str(e)}"
                 print(error_msg)
-                self.show_error_dialog("Processing Error", error_msg)
+                self.show_message_dialog("Processing Error", error_msg)  # Changed from show_error_dialog
 
     def batch_take_action(self):
         """Handle the batch take button action based on current mode"""
