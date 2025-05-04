@@ -32,8 +32,12 @@ class ImageTextExtractor:
         gray = self.get_grayscale(image)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         
-        # Apply edge detection
-        edges = cv2.Canny(blur, 75, 200)
+        # Apply edge detection with more sensitive parameters
+        edges = cv2.Canny(blur, 50, 150)  # Lower thresholds to detect more edges
+        
+        # Dilate the edges to connect broken lines
+        kernel = np.ones((3, 3), np.uint8)
+        edges = cv2.dilate(edges, kernel, iterations=1)
         
         # Find contours
         contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -42,7 +46,7 @@ class ImageTextExtractor:
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
         
         # Find the largest contour that could be a document
-        for contour in contours:
+        for contour in contours[:5]:  # Check only the 5 largest contours
             # Approximate the contour
             perimeter = cv2.arcLength(contour, True)
             approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
@@ -131,17 +135,58 @@ class ImageTextExtractor:
         return denoised
 
     def extract_text(self):
-        # Preprocess the document image
-        processed_img = self.preprocess_document(self.img_source)
+        """Extract text from the image with improved preprocessing"""
+        try:
+            # Try document detection and perspective correction first
+            processed_img = self.preprocess_document(self.img_source)
+            
+            # Apply OCR with improved parameters
+            custom_config = r'--oem 3 --psm 6'  # Page segmentation mode 6: Assume a single uniform block of text
+            data = pytesseract.image_to_data(processed_img, output_type=Output.DICT, config=custom_config)
+            
+            # Check if we got meaningful text
+            extracted_text = self.organize_text_from_data(data)
+            
+            # If no meaningful text was extracted, try with different preprocessing
+            if not extracted_text or len(extracted_text.strip()) < 5:
+                print("First attempt failed, trying alternative preprocessing...")
+                
+                # Try adaptive thresholding
+                gray = self.get_grayscale(self.img_source)
+                thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                              cv2.THRESH_BINARY, 11, 2)
+                
+                # Try OCR with different page segmentation mode
+                custom_config = r'--oem 3 --psm 1'  # Auto page segmentation
+                data = pytesseract.image_to_data(thresh, output_type=Output.DICT, config=custom_config)
+                extracted_text = self.organize_text_from_data(data)
+                
+                # If still no text, try one more approach
+                if not extracted_text or len(extracted_text.strip()) < 5:
+                    print("Second attempt failed, trying last approach...")
+                    
+                    # Try direct OCR on grayscale image
+                    custom_config = r'--oem 3 --psm 3'  # Fully automatic page segmentation
+                    extracted_text = pytesseract.image_to_string(gray, config=custom_config)
+            
+            return extracted_text
         
-        # Apply OCR on the processed image
-        data = pytesseract.image_to_data(processed_img, output_type=Output.DICT)
-        n_boxes = len(data['text'])
+        except Exception as e:
+            print(f"Error in OCR processing: {e}")
+            # Fallback to basic OCR
+            try:
+                return pytesseract.image_to_string(self.img_source)
+            except:
+                return ""
 
+    def organize_text_from_data(self, data):
+        """Organize text from pytesseract data output"""
+        n_boxes = len(data['text'])
+        
         # Organize text into paragraphs
         paragraphs = {}
         for i in range(n_boxes):
-            if int(data['conf'][i]) > 30:  # Filter out weak confidence text
+            if int(data['conf'][i]) > 20:  # Lower confidence threshold
                 block_num = data['block_num'][i]
                 par_num = data['par_num'][i]
                 text = data['text'][i]
@@ -151,12 +196,12 @@ class ImageTextExtractor:
                     if par_num not in paragraphs[block_num]:
                         paragraphs[block_num][par_num] = []
                     paragraphs[block_num][par_num].append(text)
-
+        
         # Build the paragraphs as one whole blob with spaced paragraphs
         result_text = ""
         for block_num in paragraphs:
             for par_num in paragraphs[block_num]:
                 paragraph_text = ' '.join(paragraphs[block_num][par_num])
                 result_text += paragraph_text + "\n\n"  # Add a newline to separate paragraphs
-
+        
         return result_text
