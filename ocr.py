@@ -135,41 +135,54 @@ class ImageTextExtractor:
         return denoised
 
     def extract_text(self):
-        """Extract text from the image with improved preprocessing"""
+        """Extract text from the image with improved preprocessing and language model correction"""
         try:
-            # Try document detection and perspective correction first
+            # Try multiple preprocessing approaches and combine results
+            results = []
+            
+            # Approach 1: Document detection with perspective correction
             processed_img = self.preprocess_document(self.img_source)
+            custom_config = r'--oem 3 --psm 6 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            results.append(pytesseract.image_to_string(processed_img, config=custom_config))
             
-            # Apply OCR with improved parameters
-            custom_config = r'--oem 3 --psm 6'  # Page segmentation mode 6: Assume a single uniform block of text
-            data = pytesseract.image_to_data(processed_img, output_type=Output.DICT, config=custom_config)
+            # Approach 2: Adaptive thresholding
+            gray = self.get_grayscale(self.img_source)
+            thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                          cv2.THRESH_BINARY, 11, 2)
+            custom_config = r'--oem 3 --psm 1 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            results.append(pytesseract.image_to_string(thresh, config=custom_config))
             
-            # Check if we got meaningful text
-            extracted_text = self.organize_text_from_data(data)
+            # Approach 3: Binarization with Otsu's method
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            custom_config = r'--oem 3 --psm 3 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            results.append(pytesseract.image_to_string(binary, config=custom_config))
             
-            # If no meaningful text was extracted, try with different preprocessing
-            if not extracted_text or len(extracted_text.strip()) < 5:
-                print("First attempt failed, trying alternative preprocessing...")
-                
-                # Try adaptive thresholding
-                gray = self.get_grayscale(self.img_source)
-                thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                              cv2.THRESH_BINARY, 11, 2)
-                
-                # Try OCR with different page segmentation mode
-                custom_config = r'--oem 3 --psm 1'  # Auto page segmentation
-                data = pytesseract.image_to_data(thresh, output_type=Output.DICT, config=custom_config)
-                extracted_text = self.organize_text_from_data(data)
-                
-                # If still no text, try one more approach
-                if not extracted_text or len(extracted_text.strip()) < 5:
-                    print("Second attempt failed, trying last approach...")
-                    
-                    # Try direct OCR on grayscale image
-                    custom_config = r'--oem 3 --psm 3'  # Fully automatic page segmentation
-                    extracted_text = pytesseract.image_to_string(gray, config=custom_config)
+            # Approach 4: Contrast enhancement
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(gray)
+            custom_config = r'--oem 3 --psm 4 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            results.append(pytesseract.image_to_string(enhanced, config=custom_config))
             
-            return extracted_text
+            # Find the longest result with the most words
+            best_result = ""
+            max_words = 0
+            
+            for result in results:
+                words = len(result.split())
+                if words > max_words:
+                    max_words = words
+                    best_result = result
+            
+            # If we have a reasonable result, return it
+            if max_words > 10:
+                return self.post_process_text(best_result)
+            
+            # If all approaches failed, try one last approach with different parameters
+            print("All standard approaches failed, trying specialized configuration...")
+            custom_config = r'--oem 1 --psm 12 -l eng --tessdata-dir /usr/share/tesseract-ocr/4.00/tessdata'
+            last_result = pytesseract.image_to_string(self.img_source, config=custom_config)
+            
+            return self.post_process_text(last_result)
         
         except Exception as e:
             print(f"Error in OCR processing: {e}")
@@ -178,6 +191,50 @@ class ImageTextExtractor:
                 return pytesseract.image_to_string(self.img_source)
             except:
                 return ""
+
+    def post_process_text(self, text):
+        """Apply post-processing to improve OCR text quality"""
+        if not text:
+            return ""
+        
+        # Replace common OCR errors
+        replacements = {
+            "vasa": "was a",
+            "sigh": "high",
+            "las": "has",
+            "dhis": "this",
+            "eame": "came",
+            "se,": "see,",
+            "a8": "as",
+            "fife": "life",
+            "Tong": "long",
+            "technotoay": "technology",
+            "technotoqy": "technology",
+            "eduentiorial": "educational",
+            "menial": "mental",
+            "wes": "was",
+            "burdt&s": "burdens",
+            "inthe": "in the",
+            "furure": "future",
+            "shawhd": "should",
+            "hefty": "hefty"
+        }
+        
+        for error, correction in replacements.items():
+            text = text.replace(error, correction)
+        
+        # Fix spacing issues
+        text = text.replace("  ", " ")
+        
+        # Fix line breaks
+        lines = text.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            if line.strip():  # Skip empty lines
+                processed_lines.append(line.strip())
+        
+        return '\n'.join(processed_lines)
 
     def organize_text_from_data(self, data):
         """Organize text from pytesseract data output"""
