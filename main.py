@@ -1,17 +1,18 @@
 import sys
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import QThread, pyqtSignal
-from picamera2 import Picamera2, controls
-from picamera2.previews.qt import QGlPicamera2
+# Remove Picamera2 imports
+# from picamera2 import Picamera2, controls
+# from picamera2.previews.qt import QGlPicamera2
 import cv2
 import numpy as np
 from ui_main_window import QtMainWindow
-from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
-from infer_model import AIPlagiarismDetector  # Import the AITextDetector class
-# Remove Flask imports
+from ocr import ImageTextExtractor
+from infer_model import AIPlagiarismDetector
 from queue import Queue
 from threading import Lock
 from PyQt5.QtWidgets import QMessageBox, QFileDialog
+from PyQt5.QtGui import QImage, QPixmap
 
 try:
     from infer_model import AIPlagiarismDetector as AdvancedAIPlagiarismDetector
@@ -23,15 +24,47 @@ except ImportError as e:
 
 class CaptureThread(QThread):
     capture_done = pyqtSignal(np.ndarray)
+    frame_ready = pyqtSignal(QImage)
 
-    def __init__(self, picam2):
+    def __init__(self, camera_id=0):
         super().__init__()
-        self.picam2 = picam2
+        self.camera_id = camera_id
+        self.running = True
+        self.capture_single = False
 
     def run(self):
-        # Capture the image directly into a NumPy array
-        image_array = self.picam2.capture_array()
-        self.capture_done.emit(image_array)
+        cap = cv2.VideoCapture(self.camera_id)
+        
+        # Set resolution (adjust as needed)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        
+        while self.running:
+            ret, frame = cap.read()
+            if not ret:
+                continue
+                
+            # Convert frame to QImage for display
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_frame.shape
+            qt_image = QImage(rgb_frame.data, w, h, w * ch, QImage.Format_RGB888)
+            self.frame_ready.emit(qt_image)
+            
+            # If capture requested, emit the frame and reset flag
+            if self.capture_single:
+                self.capture_done.emit(frame)
+                self.capture_single = False
+            
+            # Sleep to control frame rate
+            self.msleep(30)  # ~33 fps
+            
+        cap.release()
+        
+    def capture(self):
+        self.capture_single = True
+        
+    def stop(self):
+        self.running = False
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -41,25 +74,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = QtMainWindow()
         self.ui.setupUi(self)
 
-        # Initialize Picamera2
-        self.picam2 = Picamera2()
-
-        # Set up camera preview configuration
-        preview_width = 1080 
-        preview_height = int(self.picam2.sensor_resolution[1] * preview_width / self.picam2.sensor_resolution[0])
-        preview_config = self.picam2.create_preview_configuration(main={"size": (preview_width, preview_height)})
-        self.picam2.configure(preview_config)
+        # Create a label for displaying the camera feed
+        self.camera_label = QtWidgets.QLabel()
+        self.camera_label.setScaledContents(True)
         
-        # Replace wgtCamera placeholder with QGlPicamera2 to display the camera feed
-        self.camera_widget = QGlPicamera2(self.picam2, width=preview_width, height=preview_height, keep_ar=True)
-        
-        # Add camera_widget to the layout in place of the placeholder widget
-        self.ui.verticalLayout.replaceWidget(self.ui.wgtCamera, self.camera_widget)
+        # Add camera_label to the layout in place of the placeholder widget
+        self.ui.verticalLayout.replaceWidget(self.ui.wgtCamera, self.camera_label)
         self.ui.wgtCamera.deleteLater()  # Remove the original placeholder widget
 
-        # Start the camera preview
-        self.picam2.start()
-        #self.picam2.set_controls({"AfMode": 1})
+        # Initialize the camera thread (0 is usually the first webcam)
+        self.capture_thread = CaptureThread(camera_id=0)
+        self.capture_thread.frame_ready.connect(self.update_frame)
+        self.capture_thread.capture_done.connect(self.on_capture_done)
+        self.capture_thread.start()
 
         # Connect capture button to the capture function
         self.ui.btnSingleCap.clicked.connect(self.capture_image)
@@ -561,14 +588,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error_dialog("File Loading Error", error_msg)
 
     def capture_image(self):
-        # If not in batch mode, show progress dialog immediately
+        """Capture a single image from the webcam"""
         if not self.batch_mode:
             self.show_progress_dialog("Processing", "Capturing image...\nPlease wait.")
         
-        # Create and start the capture thread
-        self.capture_thread = CaptureThread(self.picam2)
-        self.capture_thread.capture_done.connect(self.on_capture_done)
-        self.capture_thread.start()
+        # Request a capture from the thread
+        self.capture_thread.capture()
 
     def on_capture_done(self, image_array):
         """Handle captured image based on current mode"""
@@ -687,6 +712,17 @@ class MainWindow(QtWidgets.QMainWindow):
             error_msg = f"Error loading file: {e}"
             print(error_msg)
             self.show_error_dialog("File Loading Error", error_msg)
+
+    def update_frame(self, qt_image):
+        """Update the camera display with the latest frame"""
+        pixmap = QPixmap.fromImage(qt_image)
+        self.camera_label.setPixmap(pixmap)
+
+    def closeEvent(self, event):
+        """Clean up resources when closing the application"""
+        self.capture_thread.stop()
+        self.capture_thread.wait()
+        event.accept()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

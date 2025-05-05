@@ -1,0 +1,696 @@
+import sys
+from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import QThread, pyqtSignal
+from picamera2 import Picamera2, controls
+from picamera2.previews.qt import QGlPicamera2
+import cv2
+import numpy as np
+from ui_main_window import QtMainWindow
+from ocr import ImageTextExtractor  # Import the ImageTextExtractor class
+from infer_model import AIPlagiarismDetector  # Import the AITextDetector class
+# Remove Flask imports
+from queue import Queue
+from threading import Lock
+from PyQt5.QtWidgets import QMessageBox, QFileDialog
+
+try:
+    from infer_model import AIPlagiarismDetector as AdvancedAIPlagiarismDetector
+    from infer_model2 import AIPlagiarismDetector as BasicAIPlagiarismDetector
+except ImportError as e:
+    print(f"Import error: {e}")
+    # Ensure at least the basic detector is available
+    from infer_model2 import AIPlagiarismDetector as BasicAIPlagiarismDetector
+
+class CaptureThread(QThread):
+    capture_done = pyqtSignal(np.ndarray)
+
+    def __init__(self, picam2):
+        super().__init__()
+        self.picam2 = picam2
+
+    def run(self):
+        # Capture the image directly into a NumPy array
+        image_array = self.picam2.capture_array()
+        self.capture_done.emit(image_array)
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
+        # Initialize UI
+        self.ui = QtMainWindow()
+        self.ui.setupUi(self)
+
+        # Initialize Picamera2
+        self.picam2 = Picamera2()
+
+        # Set up camera preview configuration
+        preview_width = 1080 
+        preview_height = int(self.picam2.sensor_resolution[1] * preview_width / self.picam2.sensor_resolution[0])
+        preview_config = self.picam2.create_preview_configuration(main={"size": (preview_width, preview_height)})
+        self.picam2.configure(preview_config)
+        
+        # Replace wgtCamera placeholder with QGlPicamera2 to display the camera feed
+        self.camera_widget = QGlPicamera2(self.picam2, width=preview_width, height=preview_height, keep_ar=True)
+        
+        # Add camera_widget to the layout in place of the placeholder widget
+        self.ui.verticalLayout.replaceWidget(self.ui.wgtCamera, self.camera_widget)
+        self.ui.wgtCamera.deleteLater()  # Remove the original placeholder widget
+
+        # Start the camera preview
+        self.picam2.start()
+        #self.picam2.set_controls({"AfMode": 1})
+
+        # Connect capture button to the capture function
+        self.ui.btnSingleCap.clicked.connect(self.capture_image)
+        
+        # Connect btnFromFile to the load_file method
+        self.ui.btnFromFile.clicked.connect(self.load_file)
+        self.ui.lineEdit.setPlaceholderText("Selected image file path will appear here")
+        self.ui.lineEdit.setReadOnly(True)  # Make it read-only since we're using file dialog
+        self.ui.lineEdit.hide()  # Initially hide the lineEdit
+
+        # Add batch processing components
+        self.image_queue = Queue()
+        self.queue_lock = Lock()
+        self.batch_mode = False
+        self.batch_file_mode = False  # New flag for batch file mode
+        
+        # Connect batch processing buttons that are already in the UI
+        self.ui.btnBatchCap.clicked.connect(self.toggle_batch_mode)
+        self.ui.btnFromFileBatch.clicked.connect(self.toggle_batch_file_mode)  # Connect new batch file button
+        self.ui.btnBatchTake.clicked.connect(self.batch_take_action)  # Use a new method that handles both modes
+        self.ui.btnBatchNext.clicked.connect(self.process_batch)
+        self.ui.btnBatchStop.clicked.connect(self.stop_batch_mode)
+
+        # Initially hide batch operation buttons and batch size labels
+        self.ui.btnBatchTake.hide()
+        self.ui.btnBatchNext.hide()
+        self.ui.btnBatchStop.hide()
+        self.ui.lblBatchSize.hide()
+        self.ui.lblBatchSizeVal.hide()
+        
+        # Initialize the advanced AI detector
+        try:
+            print("Attempting to initialize advanced detector...")
+            self.detector = AdvancedAIPlagiarismDetector(
+                'model/trained_model3.pkl',
+                'model/trained_model3_xgb.pkl'  # Second model is optional
+            )
+            print("Advanced detector initialized successfully")
+        except Exception as e:
+            print(f"Error initializing advanced detector: {e}")
+            print("Falling back to basic detector...")
+            # Fallback to the simpler detector if the advanced one fails
+            try:
+                self.detector = BasicAIPlagiarismDetector('model/trained_model2.pkl')
+                print("Basic detector initialized successfully")
+            except Exception as e2:
+                print(f"Error initializing basic detector: {e2}")
+                # Last resort fallback
+                from infer_model import AIPlagiarismDetector
+                self.detector = AIPlagiarismDetector('model/trained_model1.pkl')
+                print("Fallback detector initialized")
+
+    def show_message_dialog(self, title, message, detailed_text=None, highlighted_text=None):
+        """Show a message dialog with optional detailed text and highlighted text"""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        
+        # If we have detailed text, add it as detailed text
+        if detailed_text:
+            msg_box.setDetailedText(detailed_text)
+        
+        # If we have highlighted text, create a custom widget to display it
+        if highlighted_text:
+            # Create a text edit widget to show the highlighted text
+            from PyQt5.QtWidgets import QTextEdit, QVBoxLayout, QWidget, QPushButton, QDialog
+            from PyQt5.QtCore import Qt
+            
+            # Create a custom dialog for the highlighted text
+            highlight_dialog = QDialog(self)
+            highlight_dialog.setWindowTitle("Sentence-by-Sentence Analysis")
+            highlight_dialog.setWindowModality(Qt.ApplicationModal)  # Make it application modal
+            
+            # Get the main window size and limit the dialog height
+            main_window_height = 460  # Fixed height of 460 pixels
+            highlight_dialog.setMinimumSize(800, min(400, main_window_height - 60))
+            highlight_dialog.setMaximumHeight(main_window_height - 60)
+            
+            layout = QVBoxLayout()
+            
+            # Create a text edit widget for the highlighted text
+            text_edit = QTextEdit()
+            text_edit.setReadOnly(True)
+            
+            # Convert the highlighted text to HTML with colored text
+            html_text = self.convert_highlighted_text_to_html(highlighted_text)
+            text_edit.setHtml(html_text)
+            
+            layout.addWidget(text_edit)
+            
+            # Add a close button
+            close_button = QPushButton("Close")
+            close_button.clicked.connect(highlight_dialog.close)
+            layout.addWidget(close_button, alignment=Qt.AlignRight)
+            
+            highlight_dialog.setLayout(layout)
+            
+            # Create a function to show the sentence analysis dialog
+            # This ensures the original message box stays open
+            def show_sentence_analysis():
+                # Hide the message box temporarily (don't close it)
+                msg_box.setVisible(False)
+                
+                # Show the highlight dialog and wait for it to close
+                highlight_dialog.exec_()
+                
+                # Show the message box again after the highlight dialog is closed
+                msg_box.setVisible(True)
+            
+            # Add a button to the message box to show the highlighted text
+            highlight_button = msg_box.addButton("Show Sentence Analysis", QMessageBox.ActionRole)
+            highlight_button.clicked.connect(show_sentence_analysis)
+        
+        # Add standard OK button
+        msg_box.addButton(QMessageBox.Ok)
+        
+        # Show the message box and wait for user response
+        msg_box.exec_()
+
+    def convert_highlighted_text_to_html(self, highlighted_text):
+        """Convert the highlighted text with [AI: xx%] markers to HTML with red color for AI text only, removing tags"""
+        import re
+        
+        # Find all markers and their positions
+        ai_markers = [(m.start(), m.group()) for m in re.finditer(r'\[AI: \d+\.\d+%\]', highlighted_text)]
+        human_markers = [(m.start(), m.group()) for m in re.finditer(r'\[Human: \d+\.\d+%\]', highlighted_text)]
+        
+        # Combine and sort all markers by position
+        all_markers = sorted(ai_markers + human_markers)
+        
+        # If no markers found, return the original text
+        if not all_markers:
+            return f"<p>{highlighted_text}</p>"
+        
+        # Process text between markers
+        result = []
+        for i, (pos, marker) in enumerate(all_markers):
+            # Get the text after this marker until the next marker or end of text
+            if i < len(all_markers) - 1:
+                next_pos = all_markers[i+1][0]
+                text = highlighted_text[pos:next_pos]
+            else:
+                text = highlighted_text[pos:]
+            
+            # Format based on marker type, but remove the marker itself
+            if marker.startswith('[AI:'):
+                # AI text in red, without the marker
+                result.append(f'<span style="color:red;">{text[len(marker):]}</span>')
+            else:
+                # Human text in default color, without the marker
+                result.append(f'{text[len(marker):]}')
+        
+        # Add any text before the first marker
+        if all_markers[0][0] > 0:
+            prefix = highlighted_text[:all_markers[0][0]]
+            result.insert(0, prefix)
+        
+        # Combine and wrap in paragraph
+        return f"<p>{''.join(result)}</p>"
+
+    def show_progress_dialog(self, title, message):
+        """Display a non-blocking progress message"""
+        # Close any existing progress dialog first
+        self.close_progress_dialog()
+        
+        # Create and show new progress dialog
+        self.progress_dialog = QMessageBox(self)
+        self.progress_dialog.setIcon(QMessageBox.Information)
+        self.progress_dialog.setWindowTitle(title)
+        self.progress_dialog.setText(message)
+        self.progress_dialog.setStandardButtons(QMessageBox.NoButton)
+        
+        # Make dialog closable by clicking the X button
+        self.progress_dialog.setWindowFlags(
+            self.progress_dialog.windowFlags() | 
+            QtCore.Qt.WindowCloseButtonHint
+        )
+        
+        # Connect close event to our close_progress_dialog method
+        self.progress_dialog.closeEvent = lambda event: self.close_progress_dialog()
+        
+        # Show the dialog without blocking
+        self.progress_dialog.show()
+        
+        # Process events to ensure the dialog is displayed immediately
+        QtWidgets.QApplication.processEvents()
+    
+    def close_progress_dialog(self):
+        """Close the progress dialog if it exists"""
+        if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+            try:
+                self.progress_dialog.close()
+            except Exception as e:
+                print(f"Error closing progress dialog: {e}")
+            finally:
+                self.progress_dialog = None
+        
+        # Process events to ensure UI updates
+        QtWidgets.QApplication.processEvents()
+
+    def show_error_dialog(self, title, message):
+        """Show an error dialog with the given title and message"""
+        from PyQt5.QtWidgets import QMessageBox
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle(title)
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Critical)
+        msg_box.addButton(QMessageBox.Ok)
+        msg_box.exec_()
+
+    def toggle_batch_mode(self):
+        """Toggle between single capture and batch capture modes"""
+        self.batch_mode = True
+        self.batch_file_mode = False  # Explicitly set to false for camera batch mode
+        
+        # Show batch operation buttons, hide single capture and file buttons
+        self.ui.btnSingleCap.hide()
+        self.ui.btnBatchCap.hide()
+        self.ui.btnFromFile.hide()  # Hide single file button
+        self.ui.btnFromFileBatch.hide()  # Hide batch file button
+        
+        self.ui.btnBatchTake.show()
+        self.ui.btnBatchNext.show()
+        self.ui.btnBatchStop.show()
+        
+        # Ensure the button text is "Capture" for camera batch mode
+        self.ui.btnBatchTake.setText("Capture")
+        
+        # Hide the lineEdit as it's not needed in camera batch mode
+        self.ui.lineEdit.hide()
+        
+        # Show batch size labels
+        self.ui.lblBatchSize.show()
+        self.ui.lblBatchSizeVal.show()
+        self.ui.lblBatchSizeVal.setText("0")  # Reset batch size counter
+        
+        # Clear any existing queue
+        with self.queue_lock:
+            while not self.image_queue.empty():
+                self.image_queue.get()
+        
+        print("Batch mode activated. Capture images and then process them.")
+        
+        # Show a message dialog instead of using resultTextEdit
+        self.show_message_dialog(
+            "Batch Mode", 
+            "Batch mode activated.\n\n"
+            "1. Click 'Capture' to add images to the batch.\n"
+            "2. When all pages are captured, click 'Process' to analyze the entire document.\n"
+            "3. Click 'Cancel' to exit batch mode without processing."
+        )
+
+    def toggle_batch_file_mode(self):
+        """Toggle batch file capture mode"""
+        self.batch_mode = True
+        self.batch_file_mode = True
+        
+        # Show batch operation buttons, hide single capture buttons
+        self.ui.btnSingleCap.hide()
+        self.ui.btnBatchCap.hide()
+        self.ui.btnFromFile.hide()
+        self.ui.btnFromFileBatch.hide()
+        self.ui.btnBatchTake.show()
+        self.ui.btnBatchNext.show()
+        self.ui.btnBatchStop.show()
+        
+        # Show the lineEdit for file paths
+        self.ui.lineEdit.show()
+        
+        # Change the text of btnBatchTake to "Browse..."
+        self.ui.btnBatchTake.setText("Browse...")
+        
+        # Show batch size labels
+        self.ui.lblBatchSize.show()
+        self.ui.lblBatchSizeVal.show()
+        self.ui.lblBatchSizeVal.setText("0")  # Reset batch size counter
+        
+        # Clear any existing queue
+        with self.queue_lock:
+            while not self.image_queue.empty():
+                self.image_queue.get()
+        
+        print("Batch file mode activated. Add image files and then process them.")
+        
+        # Show a message dialog
+        self.show_message_dialog(
+            "Batch File Mode", 
+            "Batch file mode activated.\n\n"
+            "1. Click 'Browse' to add image files to the batch.\n"
+            "2. When all files are added, click 'Process' to analyze the entire document.\n"
+            "3. Click 'Cancel' to exit batch mode without processing."
+        )
+
+    def process_batch(self):
+        """Process all images in the queue as a single document"""
+        
+        with self.queue_lock:
+            queue_size = self.image_queue.qsize()
+            
+            if queue_size == 0:
+                print("No images in batch to process")
+                self.show_message_dialog("Batch Processing Error", "No images in batch to process")  # Changed from show_error_dialog
+                return
+            
+            # Show progress dialog
+            self.show_progress_dialog("Processing Batch", 
+                                     f"Processing {queue_size} images as a single document...\n"
+                                     f"AI plagiarism detection in progress. Please wait.")
+            
+            # Force UI update to ensure dialog appears immediately
+            QtWidgets.QApplication.processEvents()
+            
+            print(f"Processing {queue_size} images as a single document")
+            
+            # Extract text from all images and concatenate
+            all_extracted_text = ""
+            image_count = 0
+            error_occurred = False
+            error_message = ""
+            
+            # First pass: extract text from all images
+            temp_queue = Queue()
+            
+            while not self.image_queue.empty():
+                try:
+                    image_array = self.image_queue.get()
+                    temp_queue.put(image_array)  # Save image for potential debugging
+                    
+                    # Update progress dialog with current image being processed
+                    if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                        self.progress_dialog.setText(f"Processing image {image_count+1} of {queue_size}...\n"
+                                                   f"Extracting text. Please wait.")
+                        QtWidgets.QApplication.processEvents()
+                    
+                    # Extract text from the image
+                    extractor = ImageTextExtractor(image_array)
+                    extracted_text = extractor.extract_text()
+                    
+                    # Skip if no text was extracted
+                    if not extracted_text or len(extracted_text.strip()) < 5:
+                        print(f"No meaningful text extracted from image {image_count+1}, skipping")
+                        continue
+                    
+                    # Add page number and append to the combined text
+                    all_extracted_text += f"\n\n--- Page {image_count+1} ---\n\n"
+                    all_extracted_text += extracted_text
+                    image_count += 1
+                    
+                except Exception as e:
+                    error_message = str(e)
+                    print(f"Error extracting text from image: {e}")
+                    error_occurred = True
+                    continue
+            
+            # Check if we have any text to process
+            if not all_extracted_text or len(all_extracted_text.strip()) < 10:
+                self.close_progress_dialog()
+                error_msg = "No meaningful text extracted from any images in the batch"
+                if error_occurred:
+                    error_msg += f"\nError: {error_message}"
+                
+                print(error_msg)
+                self.show_error_dialog("Batch Processing Failed", error_msg)
+                self.stop_batch_mode()
+                return
+            
+            # Process the combined text with the AI detector
+            try:
+                # Update progress dialog for AI detection
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText(f"Analyzing combined text from {image_count} images...\n"
+                                               f"AI plagiarism detection in progress. Please wait.")
+                    QtWidgets.QApplication.processEvents()
+                
+                print(f"Analyzing combined text from {image_count} images")
+                result = self.detector.detect_ai_text(all_extracted_text)
+                
+                # Close progress dialog
+                self.close_progress_dialog()
+                
+                # Display results in a message box (without text preview)
+                result_text = f"Document Analysis Complete\n\n"
+                result_text += f"Images processed: {image_count}\n"
+                result_text += f"Result: {result[0]}\n"
+                result_text += f"Perplexity: {result[1]:.2f}\n"
+                result_text += f"Burstiness: {result[2]:.2f}\n\n"
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
+
+                # Check if we have highlighted text and detailed analysis
+                highlighted_text = result[4] if len(result) > 4 else None
+                detailed_analysis = result[5] if len(result) > 5 else None
+
+                self.show_message_dialog("Batch Analysis Results", result_text, detailed_analysis, highlighted_text)
+                print(f"Batch processing complete. Result: {result[0]}")
+                
+            except Exception as e:
+                self.close_progress_dialog()
+                error_msg = f"Error analyzing combined text: {str(e)}"
+                print(error_msg)
+                self.show_error_dialog("Analysis Error", error_msg)
+        
+        # Return to normal mode after processing
+        self.stop_batch_mode()
+    
+    def stop_batch_mode(self):
+        """Exit batch mode and return to normal operation"""
+        self.batch_mode = False
+        self.batch_file_mode = False
+        
+        # Show normal buttons, hide batch operation buttons
+        self.ui.btnSingleCap.show()
+        self.ui.btnBatchCap.show()
+        self.ui.btnFromFile.show()
+        self.ui.btnFromFileBatch.show()
+        self.ui.btnBatchTake.hide()
+        self.ui.btnBatchNext.hide()
+        self.ui.btnBatchStop.hide()
+        
+        # Hide batch size labels
+        self.ui.lblBatchSize.hide()
+        self.ui.lblBatchSizeVal.hide()
+        
+        # Hide the lineEdit when returning to normal mode
+        self.ui.lineEdit.hide()
+        
+        print("Batch mode deactivated.")
+
+    def load_file(self):
+        # Open file dialog to select an image file
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            "",  # Start in the current directory
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
+        )
+        
+        # If user cancels the dialog, file_path will be empty
+        if not file_path:
+            return
+        
+        # Update the lineEdit with the selected file path and show it
+        self.ui.lineEdit.setText(file_path)
+        self.ui.lineEdit.show()
+        
+        # Show progress dialog immediately
+        self.show_progress_dialog("Processing File", 
+                                 "Loading file...\nPlease wait.")
+        QtWidgets.QApplication.processEvents()
+
+        try:
+            # Load the image using OpenCV
+            image_array = cv2.imread(file_path)
+
+            if image_array is None:
+                self.close_progress_dialog()
+                raise FileNotFoundError("Could not load the image from the provided path.")
+
+            # Update progress dialog
+            if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                self.progress_dialog.setText("Extracting text from file...\nPlease wait.")
+                QtWidgets.QApplication.processEvents()
+
+            # Process the loaded image
+            extractor = ImageTextExtractor(image_array)
+            extracted_text = extractor.extract_text()
+            print("Extracted Text from File:")
+            print(extracted_text)
+            
+            # Update progress dialog
+            if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                QtWidgets.QApplication.processEvents()
+            
+            # Detect AI-generated text
+            result = self.detector.detect_ai_text(extracted_text)
+            print(result)
+
+            # Close progress dialog
+            self.close_progress_dialog()
+
+            # Display results in a message box (without text preview)
+            result_text = f"File: {file_path}\n\n"
+            result_text += f"Result: {result[0]}\n"
+            result_text += f"Perplexity: {result[1]:.2f}\n"
+            result_text += f"Burstiness: {result[2]:.2f}\n\n"
+            result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
+
+            # Check if we have highlighted text and detailed analysis
+            highlighted_text = result[4] if len(result) > 4 else None
+            detailed_analysis = result[5] if len(result) > 5 else None
+
+            self.show_message_dialog("File Analysis Results", result_text, detailed_analysis, highlighted_text)
+            
+        except Exception as e:
+            self.close_progress_dialog()
+            error_msg = f"Error loading file: {e}"
+            print(error_msg)
+            self.show_error_dialog("File Loading Error", error_msg)
+
+    def capture_image(self):
+        # If not in batch mode, show progress dialog immediately
+        if not self.batch_mode:
+            self.show_progress_dialog("Processing", "Capturing image...\nPlease wait.")
+        
+        # Create and start the capture thread
+        self.capture_thread = CaptureThread(self.picam2)
+        self.capture_thread.capture_done.connect(self.on_capture_done)
+        self.capture_thread.start()
+
+    def on_capture_done(self, image_array):
+        """Handle captured image based on current mode"""
+        
+        if self.batch_mode:
+            # In batch mode, add to queue instead of processing immediately
+            with self.queue_lock:
+                self.image_queue.put(image_array)
+                queue_size = self.image_queue.qsize()
+            
+            # Update batch size label
+            self.ui.lblBatchSizeVal.setText(str(queue_size))
+        
+            print(f"Added image to batch. Queue size: {queue_size}")
+            # Remove the message dialog - the label is sufficient feedback
+        else:
+            # In single capture mode, process immediately as before
+            try:
+                # Update progress dialog message
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText("Extracting text from image...\nPlease wait.")
+                    QtWidgets.QApplication.processEvents()
+                else:
+                    # If dialog was closed, create a new one
+                    self.show_progress_dialog("Processing", "Extracting text from image...\nPlease wait.")
+                
+                extractor = ImageTextExtractor(image_array)
+                extracted_text = extractor.extract_text()
+                
+                if not extracted_text or len(extracted_text.strip()) < 5:
+                    self.close_progress_dialog()  # Ensure dialog is closed
+                    error_msg = "No meaningful text extracted from image"
+                    print(error_msg)
+                    self.show_message_dialog("Text Extraction Error", error_msg)  # Changed from show_error_dialog
+                    return
+                
+                # Update progress dialog for AI detection step
+                if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
+                    self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                    QtWidgets.QApplication.processEvents()
+                    
+                print("Extracted Text:")
+                print(extracted_text)
+                
+                # Use AITextDetector to check if the extracted text is AI-generated
+                result = self.detector.detect_ai_text(extracted_text)
+                print(result)
+
+                # Close progress dialog before showing results
+                self.close_progress_dialog()
+
+                # Display results in a message box (without text preview)
+                result_text = f"Result: {result[0]}\n"
+                result_text += f"Perplexity: {result[1]:.2f}\n"
+                result_text += f"Burstiness: {result[2]:.2f}\n\n"
+                result_text += f"Interpretation: {result[3] if len(result) > 3 else 'No interpretation available'}"
+
+                # Check if we have highlighted text and detailed analysis
+                highlighted_text = result[4] if len(result) > 4 else None
+                detailed_analysis = result[5] if len(result) > 5 else None
+
+                self.show_message_dialog("Analysis Results", result_text, detailed_analysis, highlighted_text)
+                
+            except Exception as e:
+                # Ensure dialog is closed even on exception
+                self.close_progress_dialog()
+                error_msg = f"Error processing image: {str(e)}"
+                print(error_msg)
+                self.show_message_dialog("Processing Error", error_msg)  # Changed from show_error_dialog
+
+    def batch_take_action(self):
+        """Handle the batch take button action based on current mode"""
+        if self.batch_file_mode:
+            # In batch file mode, open file dialog
+            self.load_file_to_batch()
+        else:
+            # In batch camera mode, capture image
+            self.capture_image()
+
+    def load_file_to_batch(self):
+        """Load a file and add it to the batch queue"""
+        # Open file dialog to select an image file
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image File",
+            "",  # Start in the current directory
+            "Image Files (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All Files (*)"
+        )
+        
+        # If user cancels the dialog, file_path will be empty
+        if not file_path:
+            return
+        
+        # Update the lineEdit with the selected file path
+        self.ui.lineEdit.setText(file_path)
+        self.ui.lineEdit.show()  # Ensure lineEdit is visible
+        
+        try:
+            # Load the image using OpenCV
+            image_array = cv2.imread(file_path)
+
+            if image_array is None:
+                raise FileNotFoundError("Could not load the image from the provided path.")
+
+            # Add the image to the batch queue
+            with self.queue_lock:
+                self.image_queue.put(image_array)
+                queue_size = self.image_queue.qsize()
+            
+            # Update batch size label
+            self.ui.lblBatchSizeVal.setText(str(queue_size))
+            
+            print(f"Added file to batch: {file_path}. Queue size: {queue_size}")
+            
+        except Exception as e:
+            error_msg = f"Error loading file: {e}"
+            print(error_msg)
+            self.show_error_dialog("File Loading Error", error_msg)
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    
+    sys.exit(app.exec())
