@@ -31,15 +31,52 @@ class CaptureThread(QThread):
         self.camera_id = camera_id
         self.running = True
         self.capture_single = False
-
+        self.property_updates = {}
+        self.property_lock = Lock()
+    
+    def update_property(self, prop, value):
+        """Update a camera property"""
+        with self.property_lock:
+            self.property_updates[prop] = value
+    
     def run(self):
         cap = cv2.VideoCapture(self.camera_id)
+        
+        if not cap.isOpened():
+            print(f"ERROR: Could not open camera with ID {self.camera_id}")
+            return
         
         # Set resolution (adjust as needed)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         
+        # Initialize camera properties with default values
+        default_properties = {
+            cv2.CAP_PROP_BRIGHTNESS: 0.5,
+            cv2.CAP_PROP_CONTRAST: 0.5,
+            cv2.CAP_PROP_SATURATION: 0.5,
+            cv2.CAP_PROP_SHARPNESS: 0.5,
+            cv2.CAP_PROP_GAIN: 0.5
+        }
+        
+        # Try to set initial properties
+        for prop, value in default_properties.items():
+            success = cap.set(prop, value)
+            if success:
+                print(f"Set initial property {prop} to {value}")
+            else:
+                print(f"Failed to set initial property {prop}")
+        
         while self.running:
+            # Apply any pending property updates
+            with self.property_lock:
+                for prop, value in self.property_updates.items():
+                    success = cap.set(prop, value)
+                    if not success:
+                        print(f"Failed to set property {prop} to {value}")
+                self.property_updates.clear()
+            
+            # Capture frame
             ret, frame = cap.read()
             if not ret:
                 continue
@@ -82,12 +119,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.verticalLayout.replaceWidget(self.ui.wgtCamera, self.camera_label)
         self.ui.wgtCamera.deleteLater()  # Remove the original placeholder widget
 
-        # Initialize the camera thread (0 is usually the first webcam)
-        self.capture_thread = CaptureThread(camera_id=0)
-        self.capture_thread.frame_ready.connect(self.update_frame)
-        self.capture_thread.capture_done.connect(self.on_capture_done)
-        self.capture_thread.start()
-
+        # Populate camera selection combo box
+        self.populate_camera_list()
+        
+        # Connect camera selection combo box
+        self.ui.comboBox.currentIndexChanged.connect(self.on_camera_selected)
+        
+        # Initialize with the first available camera (or default to 0)
+        camera_id = 0
+        if self.ui.comboBox.count() > 0:
+            camera_id = self.ui.comboBox.currentData()
+        
+        # Initialize the camera thread
+        self.init_camera_thread(camera_id)
+        
+        # Connect camera parameter sliders
+        self.connect_camera_sliders()
+        
         # Connect capture button to the capture function
         self.ui.btnSingleCap.clicked.connect(self.capture_image)
         
@@ -723,6 +771,122 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture_thread.stop()
         self.capture_thread.wait()
         event.accept()
+
+    def populate_camera_list(self):
+        """Populate the camera selection combo box with available cameras"""
+        self.ui.comboBox.clear()
+        
+        # Find available cameras
+        available_cameras = []
+        for i in range(10):  # Check first 10 camera indices
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                # Get camera name if possible
+                camera_name = f"Camera {i}"
+                try:
+                    # Some cameras provide their name through CAP_PROP_BACKEND
+                    backend = cap.getBackendName() if hasattr(cap, 'getBackendName') else "Unknown"
+                    camera_name = f"Camera {i} ({backend})"
+                except:
+                    pass
+                
+                available_cameras.append((i, camera_name))
+                cap.release()
+        
+        # Add cameras to combo box
+        for camera_id, camera_name in available_cameras:
+            self.ui.comboBox.addItem(camera_name, camera_id)
+        
+        if not available_cameras:
+            self.ui.comboBox.addItem("No cameras found", -1)
+            print("No cameras found")
+    
+    def on_camera_selected(self, index):
+        """Handle camera selection from combo box"""
+        if index < 0:
+            return
+            
+        camera_id = self.ui.comboBox.currentData()
+        if camera_id < 0:
+            return
+            
+        print(f"Switching to camera {camera_id}")
+        
+        # Stop current camera thread if running
+        if hasattr(self, 'capture_thread') and self.capture_thread.isRunning():
+            self.capture_thread.stop()
+            self.capture_thread.wait()
+        
+        # Initialize new camera thread
+        self.init_camera_thread(camera_id)
+    
+    def init_camera_thread(self, camera_id):
+        """Initialize the camera capture thread"""
+        self.capture_thread = CaptureThread(camera_id=camera_id)
+        self.capture_thread.frame_ready.connect(self.update_frame)
+        self.capture_thread.capture_done.connect(self.on_capture_done)
+        
+        # Start the thread
+        self.capture_thread.start()
+        
+        # Wait a moment for the camera to initialize
+        QtCore.QTimer.singleShot(500, self.update_sliders_from_camera)
+    
+    def connect_camera_sliders(self):
+        """Connect camera parameter sliders to their respective functions"""
+        # Map sliders to OpenCV properties
+        self.slider_property_map = {
+            self.ui.sldCamBrightness: cv2.CAP_PROP_BRIGHTNESS,
+            self.ui.sldCamContrast: cv2.CAP_PROP_CONTRAST,
+            self.ui.sldCamSaturation: cv2.CAP_PROP_SATURATION,
+            self.ui.sldCamSharpness: cv2.CAP_PROP_SHARPNESS,
+            self.ui.sldCamGain: cv2.CAP_PROP_GAIN
+        }
+        
+        # Set initial slider values and connect signals
+        for slider, prop in self.slider_property_map.items():
+            # Set range (0-100)
+            slider.setMinimum(0)
+            slider.setMaximum(100)
+            slider.setValue(50)  # Default to middle value
+            
+            # Connect value changed signal
+            slider.valueChanged.connect(self.on_slider_changed)
+    
+    def on_slider_changed(self):
+        """Handle slider value changes"""
+        slider = self.sender()
+        if slider in self.slider_property_map:
+            prop = self.slider_property_map[slider]
+            value = slider.value() / 100.0  # Convert to 0-1 range
+            
+            # Update camera property in the capture thread
+            if hasattr(self, 'capture_thread') and self.capture_thread.isRunning():
+                self.capture_thread.update_property(prop, value)
+
+    def update_sliders_from_camera(self):
+        """Update slider positions based on current camera properties"""
+        if not hasattr(self, 'capture_thread') or not self.capture_thread.isRunning():
+            return
+            
+        # Create a temporary capture to read properties
+        cap = cv2.VideoCapture(self.capture_thread.camera_id)
+        if not cap.isOpened():
+            return
+            
+        # Read properties and update sliders
+        for slider, prop in self.slider_property_map.items():
+            value = cap.get(prop)
+            # Convert from 0-1 range to 0-100 for slider
+            slider_value = int(value * 100)
+            # Ensure value is in valid range
+            slider_value = max(0, min(100, slider_value))
+            # Update slider without triggering valueChanged signal
+            slider.blockSignals(True)
+            slider.setValue(slider_value)
+            slider.blockSignals(False)
+            
+        cap.release()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
