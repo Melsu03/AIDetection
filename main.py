@@ -47,8 +47,8 @@ class CaptureThread(QThread):
             return
         
         # Set resolution (adjust as needed)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # Higher resolution
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)  # Higher resolution
         
         # Initialize camera properties with default values
         default_properties = {
@@ -113,7 +113,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Create a label for displaying the camera feed
         self.camera_label = QtWidgets.QLabel()
-        self.camera_label.setScaledContents(True)
+        self.camera_label.setScaledContents(False)  # Change from True to False
+        self.camera_label.setMinimumSize(800, 600)  # Set a reasonable minimum size
+        self.camera_label.setAlignment(QtCore.Qt.AlignCenter)  # Center the content
         
         # Add camera_label to the layout in place of the placeholder widget
         self.ui.verticalLayout.replaceWidget(self.ui.wgtCamera, self.camera_label)
@@ -762,9 +764,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.show_error_dialog("File Loading Error", error_msg)
 
     def update_frame(self, qt_image):
-        """Update the camera display with the latest frame"""
+        """Update the camera display with the latest frame while preserving aspect ratio"""
         pixmap = QPixmap.fromImage(qt_image)
-        self.camera_label.setPixmap(pixmap)
+        
+        # Scale the pixmap while preserving aspect ratio
+        scaled_pixmap = pixmap.scaled(self.camera_label.width(), 
+                                     self.camera_label.height(),
+                                     QtCore.Qt.KeepAspectRatio, 
+                                     QtCore.Qt.SmoothTransformation)
+        
+        self.camera_label.setPixmap(scaled_pixmap)
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
