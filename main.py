@@ -443,7 +443,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Show progress dialog
             self.show_progress_dialog("Processing Batch", 
                                      f"Processing {queue_size} images as a single document...\n"
-                                     f"AI plagiarism detection in progress. Please wait.")
+                                     f"AI detection in progress. Please wait.")
             
             # Force UI update to ensure dialog appears immediately
             QtWidgets.QApplication.processEvents()
@@ -507,7 +507,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Update progress dialog for AI detection
                 if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
                     self.progress_dialog.setText(f"Analyzing combined text from {image_count} images...\n"
-                                               f"AI plagiarism detection in progress. Please wait.")
+                                               f"AI detection in progress. Please wait.")
                     QtWidgets.QApplication.processEvents()
                 
                 print(f"Analyzing combined text from {image_count} images")
@@ -606,7 +606,7 @@ class MainWindow(QtWidgets.QMainWindow):
             
             # Update progress dialog
             if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
-                self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                self.progress_dialog.setText("AI detection in progress...\nPlease wait.")
                 QtWidgets.QApplication.processEvents()
             
             # Detect AI-generated text
@@ -680,7 +680,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 
                 # Update progress dialog for AI detection step
                 if hasattr(self, 'progress_dialog') and self.progress_dialog is not None:
-                    self.progress_dialog.setText("AI plagiarism detection in progress...\nPlease wait.")
+                    self.progress_dialog.setText("AI detection in progress...\nPlease wait.")
                     QtWidgets.QApplication.processEvents()
                     
                 print("Extracted Text:")
